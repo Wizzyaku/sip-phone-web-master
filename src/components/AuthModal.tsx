@@ -333,7 +333,7 @@ export function AuthModal() {
           {/* Header */}
           <div className="flex items-center justify-between px-6 pt-3 pb-1">
             <div className="flex items-center gap-2">
-              <img src="/phonicity.png" alt="Phonicity" className="h-8 w-8 object-contain" />
+              <img src="/phonicity.png" alt="Phonicity" className="h-10 w-10 object-contain rounded-md" />
               <span className="text-base font-bold text-primary">Phonicity</span>
             </div>
             <button
