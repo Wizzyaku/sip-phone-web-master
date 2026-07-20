@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Moon, Sun, Check, X, Plus, Wallet, PhoneCall } from 'lucide-react';
+import { Search, Bell, Moon, Sun, Check, X, Plus, Wallet } from 'lucide-react';
 import { useAppStore, unreadCount } from '../store/appStore';
 import { formatTokens } from '../lib/balance';
 import { Button } from '../components/ui/button';
@@ -47,9 +47,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="flex flex-1 items-center gap-3">
         {/* Phonicity logo + name */}
         <div className="flex items-center gap-2.5 lg:hidden">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]">
-            <PhoneCall className="h-5 w-5" />
-          </div>
+          <img src="/phonicity.png" alt="Phonicity" className="h-9 w-9 object-contain" />
           <h1 className="text-[15px] font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Phonicity</h1>
         </div>
 

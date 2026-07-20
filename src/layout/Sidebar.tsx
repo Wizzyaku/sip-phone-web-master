@@ -10,7 +10,6 @@ import {
   Settings,
   HelpCircle,
   LogOut,
-  PhoneCall,
 } from 'lucide-react';
 import { useAppStore, unreadMessages } from '../store/appStore';
 import { Badge } from '../components/ui/badge';
@@ -48,9 +47,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Brand */}
       <div className="mb-6 px-2 hidden lg:block">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-[0_4px_12px_rgba(99,102,241,0.3)]">
-            <PhoneCall className="h-5 w-5" />
-          </div>
+          <img src="/phonicity.png" alt="Phonicity" className="h-9 w-9 object-contain" />
           <div>
             <h1 className="text-base font-extrabold leading-tight text-slate-800 dark:text-slate-100">Phonicity</h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Enterprise</p>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Cloud, X, Mail, Lock, User, ArrowRight, ArrowLeft, Loader2,
-  Shield, Globe, Sparkles, Eye, EyeOff
+  X, Mail, Lock, User, ArrowRight, ArrowLeft, Loader2,
+  Eye, EyeOff
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -190,7 +190,6 @@ export function AuthModal() {
   const [loginEmail, setLoginEmail] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [companySize, setCompanySize] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -247,7 +246,7 @@ export function AuthModal() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!fullName.trim() || !signupEmail.trim() || !password.trim() || !companySize) {
+    if (!fullName.trim() || !signupEmail.trim() || !password.trim()) {
       setError('Please fill in all required fields.');
       return;
     }
@@ -267,7 +266,6 @@ export function AuthModal() {
         options: {
           data: {
             full_name: fullName.trim(),
-            company_size: companySize,
           },
         },
       });
@@ -322,7 +320,7 @@ export function AuthModal() {
         <div
           className={cn(
             'w-full md:max-w-md bg-background rounded-t-3xl md:rounded-3xl shadow-2xl',
-            'max-h-[92vh] md:max-h-[90vh] overflow-y-auto',
+            'max-h-[88vh] md:max-h-[85vh] overflow-y-auto',
             'animate-fade-in'
           )}
           onClick={(e) => e.stopPropagation()}
@@ -333,20 +331,20 @@ export function AuthModal() {
           </div>
 
           {/* Header */}
-          <div className="flex items-center justify-between px-6 pt-4 pb-2">
+          <div className="flex items-center justify-between px-6 pt-3 pb-1">
             <div className="flex items-center gap-2">
-              <Cloud className="h-7 w-7 text-primary" />
-              <span className="text-lg font-bold text-primary">Phonicity</span>
+              <img src="/phonicity.png" alt="Phonicity" className="h-8 w-8 object-contain" />
+              <span className="text-base font-bold text-primary">Phonicity</span>
             </div>
             <button
               onClick={close}
-              className="p-2 rounded-lg hover:bg-muted transition-colors"
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors"
             >
-              <X className="h-5 w-5 text-muted-foreground" />
+              <X className="h-4 w-4 text-muted-foreground" />
             </button>
           </div>
 
-          <div className="px-6 pb-8 pt-2">
+          <div className="px-6 pb-6 pt-1">
             {/* OTP Step */}
             {step === 'otp' ? (
               <div>
@@ -361,10 +359,10 @@ export function AuthModal() {
               </div>
             ) : mode === 'login' ? (
               /* Login Form */
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">Welcome back</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <h2 className="text-xl font-bold text-foreground">Welcome back</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
                     Sign in to manage your calls, messages, and contacts.
                   </p>
                 </div>
@@ -375,8 +373,8 @@ export function AuthModal() {
                   </div>
                 )}
 
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
+                <form onSubmit={handleLogin} className="space-y-3">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-muted-foreground">Email</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -385,13 +383,13 @@ export function AuthModal() {
                         placeholder="name@company.com"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        className="pl-10 h-11 rounded-xl"
+                        className="pl-10 h-10 rounded-xl"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-muted-foreground">Password</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -400,7 +398,7 @@ export function AuthModal() {
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 pr-10 h-11 rounded-xl"
+                        className="pl-10 pr-10 h-10 rounded-xl"
                         required
                       />
                       <button
@@ -415,7 +413,7 @@ export function AuthModal() {
 
                   <Button
                     type="submit"
-                    className="w-full h-11 rounded-xl text-base font-semibold shadow-lg shadow-primary/20"
+                    className="w-full h-10 rounded-xl text-base font-semibold shadow-lg shadow-primary/20"
                     disabled={loading}
                   >
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -425,7 +423,7 @@ export function AuthModal() {
                 </form>
 
                 {/* Social auth */}
-                <div className="pt-2">
+                <div className="pt-1">
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
                       <div className="w-full border-t border-border" />
@@ -434,8 +432,8 @@ export function AuthModal() {
                       <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <Button variant="outline" className="h-10 rounded-xl">
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <Button variant="outline" className="h-9 rounded-xl">
                       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
                         <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
@@ -444,7 +442,7 @@ export function AuthModal() {
                       </svg>
                       <span className="font-semibold text-sm">Google</span>
                     </Button>
-                    <Button variant="outline" className="h-10 rounded-xl">
+                    <Button variant="outline" className="h-9 rounded-xl">
                       <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
                       </svg>
@@ -453,7 +451,7 @@ export function AuthModal() {
                   </div>
                 </div>
 
-                <p className="text-center text-sm text-muted-foreground pt-2">
+                <p className="text-center text-sm text-muted-foreground pt-1">
                   Don't have an account?{' '}
                   <button
                     onClick={() => switchMode('signup')}
@@ -465,28 +463,12 @@ export function AuthModal() {
               </div>
             ) : (
               /* Signup Form */
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">Create your account</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <h2 className="text-xl font-bold text-foreground">Create your account</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
                     Start your free trial. No credit card required.
                   </p>
-                </div>
-
-                {/* Trust indicators */}
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Globe className="h-3.5 w-3.5 text-primary" />
-                    50+ countries
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Shield className="h-3.5 w-3.5 text-primary" />
-                    Bank-level security
-                  </div>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Sparkles className="h-3.5 w-3.5 text-primary" />
-                    Setup in minutes
-                  </div>
                 </div>
 
                 {error && (
@@ -495,8 +477,8 @@ export function AuthModal() {
                   </div>
                 )}
 
-                <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
+                <form onSubmit={handleSignup} className="space-y-3">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-muted-foreground">Full Name</label>
                     <div className="relative">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -505,13 +487,13 @@ export function AuthModal() {
                         placeholder="John Doe"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="pl-10 h-11 rounded-xl"
+                        className="pl-10 h-10 rounded-xl"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-muted-foreground">Email</label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -520,30 +502,13 @@ export function AuthModal() {
                         placeholder="john@company.com"
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
-                        className="pl-10 h-11 rounded-xl"
+                        className="pl-10 h-10 rounded-xl"
                         required
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-muted-foreground">Company Size</label>
-                    <select
-                      value={companySize}
-                      onChange={(e) => setCompanySize(e.target.value)}
-                      className="w-full h-11 rounded-xl border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      required
-                    >
-                      <option value="">Select company size</option>
-                      <option value="1-10">1-10 employees</option>
-                      <option value="11-50">11-50 employees</option>
-                      <option value="51-200">51-200 employees</option>
-                      <option value="201-500">201-500 employees</option>
-                      <option value="500+">500+ employees</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <label className="text-sm font-medium text-muted-foreground">Password</label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -552,7 +517,7 @@ export function AuthModal() {
                         placeholder="At least 8 characters"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 pr-10 h-11 rounded-xl"
+                        className="pl-10 pr-10 h-10 rounded-xl"
                         required
                       />
                       <button
@@ -593,7 +558,7 @@ export function AuthModal() {
 
                   <Button
                     type="submit"
-                    className="w-full h-11 rounded-xl text-base font-semibold shadow-lg shadow-primary/20"
+                    className="w-full h-10 rounded-xl text-base font-semibold shadow-lg shadow-primary/20"
                     disabled={loading}
                   >
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
