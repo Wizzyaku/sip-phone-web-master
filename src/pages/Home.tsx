@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Cloud, Phone, MessageSquare, Route, Globe, Shield, Zap,
+  Cloud, Phone, MessageSquare, Route, Zap,
   CheckCircle, ArrowRight, Star, Menu, X, ChevronDown,
   Users, TrendingUp, Clock, BarChart3
 } from 'lucide-react';

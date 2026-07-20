@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Cloud, X, Mail, Lock, User, ArrowRight, ArrowLeft, Loader2,
-  CheckCircle, Shield, Globe, Sparkles, Eye, EyeOff
+  Shield, Globe, Sparkles, Eye, EyeOff
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
