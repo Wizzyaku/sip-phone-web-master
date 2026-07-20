@@ -160,9 +160,9 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       user: {
-        name: 'Alex Telnyx',
-        email: 'alex@example.com',
-        avatar: 'AT',
+        name: '',
+        email: '',
+        avatar: '',
       },
       theme: 'system',
       resolvedTheme: 'light',

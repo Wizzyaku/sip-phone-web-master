@@ -1,4 +1,4 @@
-import { useMemo, memo, useState } from 'react';
+import { useMemo, memo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   PlusCircle,
@@ -12,7 +12,6 @@ import {
   MoreVertical,
   CheckCircle,
   Wallet,
-  TrendingUp,
   RefreshCw,
   X,
 } from 'lucide-react';
@@ -20,15 +19,34 @@ import { useAppStore } from '../store/appStore';
 import { formatTokens } from '../lib/balance';
 import { cn } from '../lib/utils';
 import { BuyNumberModal } from '../components/BuyNumberModal';
+import { fetchUserPhoneNumbers, type PhoneNumberRecord } from '../lib/phoneNumbers';
+import { fetchCallLogs, type CallLogRecord } from '../lib/callLogs';
+import { fetchTransactions, type Transaction } from '../lib/balance';
 
 function formatTime(date: string): string {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function buildTrend() {
+function buildTrend(callLogs: CallLogRecord[], messages: { createdAt: string; type: string }[]) {
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const counts = days.map(() => Math.floor(Math.random() * 80) + 20); // mock data
-  const max = 100;
+  const today = new Date();
+  const counts = days.map((_, i) => {
+    const dayStart = new Date(today);
+    dayStart.setDate(today.getDate() - (6 - i));
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+    const callCount = callLogs.filter((c) => {
+      const d = new Date(c.created_at);
+      return d >= dayStart && d <= dayEnd;
+    }).length;
+    const smsCount = messages.filter((m) => {
+      const d = new Date(m.createdAt);
+      return d >= dayStart && d <= dayEnd;
+    }).length;
+    return callCount + smsCount;
+  });
+  const max = Math.max(...counts, 1);
   return { days, counts, max };
 }
 
@@ -43,46 +61,69 @@ export function Dashboard() {
   const [buyNumberOpen, setBuyNumberOpen] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState(50);
   const [paying, setPaying] = useState(false);
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumberRecord[]>([]);
+  const [callLogs, setCallLogs] = useState<CallLogRecord[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const trend = useMemo(() => buildTrend(), []);
+  useEffect(() => {
+    const loadData = async () => {
+      const [numbers, logs, txns] = await Promise.all([
+        fetchUserPhoneNumbers(),
+        fetchCallLogs(20),
+        fetchTransactions(),
+      ]);
+      setPhoneNumbers(numbers);
+      setCallLogs(logs);
+      setTransactions(txns);
+    };
+    loadData();
+  }, []);
+
+  const trend = useMemo(() => buildTrend(callLogs, messages), [callLogs, messages]);
 
   const activity = useMemo(() => {
-    if (messages.length === 0) {
-      return [
-        { id: '1', title: 'Received SMS', description: 'From +1 (555) 987-6543', time: 'Just now', type: 'message' },
-        { id: '2', title: 'Wallet Top Up', description: '$50.00 added successfully', time: '2h ago', type: 'topup' },
-        { id: '3', title: '+1 (555) 234-5678', description: 'In • 2m 45s', time: '10:42', type: 'incoming' },
-        { id: '4', title: 'Unknown Caller', description: 'Missed', time: '09:15', type: 'missed' },
-        { id: '5', title: '+44 20 7946 0958', description: 'Out • 14m 12s', time: '1d', type: 'outgoing' },
-      ];
-    }
-    return messages.slice(0, 6).map((m, i) => {
+    const items: { id: string; title: string; description: string; time: string; type: string }[] = [];
+
+    for (const m of messages.slice(0, 10)) {
       const isInbound = m.direction === 'inbound';
       const isSms = m.type === 'text';
-      let type = isSms ? 'message' : isInbound ? 'incoming' : 'outgoing';
-      let description = '';
-      if (isSms) description = `"${m.body.substring(0, 25)}..."`;
-      else if (type === 'incoming') description = 'In • 2m 45s';
-      else description = 'Out • 14m 12s';
-
-      if (i === 2 && !isSms) {
-        type = 'missed';
-        description = 'Missed';
+      if (isSms) {
+        items.push({
+          id: m.id,
+          title: isInbound ? m.from || m.conversationId : m.to || m.conversationId,
+          description: `"${m.body.substring(0, 25)}..."`,
+          time: formatTime(m.createdAt),
+          type: 'message',
+        });
       }
+    }
 
-      return {
-        id: m.id,
-        title: isInbound ? m.from || m.conversationId : m.to || m.conversationId,
-        description,
-        time: formatTime(m.createdAt),
-        type,
-      };
-    });
-  }, [messages]);
+    for (const c of callLogs.slice(0, 10)) {
+      const mins = Math.floor(c.duration_seconds / 60);
+      const secs = c.duration_seconds % 60;
+      const durationStr = `${mins}m ${secs.toString().padStart(2, '0')}s`;
+      if (c.type === 'missed') {
+        items.push({ id: c.id, title: c.remote_identity, description: 'Missed', time: formatTime(c.created_at), type: 'missed' });
+      } else if (c.type === 'incoming') {
+        items.push({ id: c.id, title: c.remote_identity, description: `In • ${durationStr}`, time: formatTime(c.created_at), type: 'incoming' });
+      } else {
+        items.push({ id: c.id, title: c.remote_identity, description: `Out • ${durationStr}`, time: formatTime(c.created_at), type: 'outgoing' });
+      }
+    }
 
-  const activeNumbers = Math.max(1, conversations.length);
-  const callCount = activity.filter((a) => a.type === 'incoming' || a.type === 'outgoing').length;
-  const smsCount = activity.filter((a) => a.type === 'message').length;
+    for (const t of transactions.slice(0, 5)) {
+      if (t.status === 'success') {
+        items.push({ id: t.id, title: 'Wallet Top Up', description: `+${formatTokens(t.tokens)} tokens`, time: formatTime(t.createdAt), type: 'topup' });
+      }
+    }
+
+    items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    return items.slice(0, 8);
+  }, [messages, callLogs, transactions]);
+
+  const activeNumbers = phoneNumbers.filter((n) => n.active).length;
+  const callCount = callLogs.filter((c) => c.type === 'incoming' || c.type === 'outgoing').length;
+  const smsCount = messages.filter((m) => m.type === 'text').length;
 
   const handlePay = () => {
     setPaying(true);
@@ -144,7 +185,7 @@ export function Dashboard() {
           <div className="bg-white border border-slate-200/80 rounded-[16px] p-2.5 shadow-[0_2px_10px_rgba(15,23,42,0.02)] flex flex-col items-center justify-center text-center dark:bg-slate-900 dark:border-slate-700/50">
             <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Calls</span>
             <h3 className="text-[18px] font-extrabold text-slate-800 dark:text-slate-100 leading-none">{callCount}</h3>
-            <span className="text-[8.5px] font-bold text-emerald-500 bg-emerald-50 px-1 rounded mt-1">+12%</span>
+            <span className="text-[8.5px] font-bold text-slate-400 mt-1">Total</span>
           </div>
           <div className="bg-white border border-slate-200/80 rounded-[16px] p-2.5 shadow-[0_2px_10px_rgba(15,23,42,0.02)] flex flex-col items-center justify-center text-center dark:bg-slate-900 dark:border-slate-700/50">
             <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">SMS</span>
@@ -166,28 +207,24 @@ export function Dashboard() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {conversations.slice(0, 2).map((conv) => (
+            {phoneNumbers.slice(0, 2).map((num) => (
               <div
-                key={conv.id}
+                key={num.id}
                 className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-2.5 flex items-center justify-between active:bg-slate-50 transition-colors dark:bg-slate-900 dark:border-slate-700/50"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-full bg-slate-100 text-[18px] flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-                    {conv.avatar.startsWith('http') ? (
-                      <img src={conv.avatar} alt="" className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <span>{conv.avatar}</span>
-                    )}
+                    {num.flag || '📞'}
                   </div>
                   <div className="flex flex-col min-w-0">
                     <div className="flex items-center gap-1.5">
                       <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                        {conv.contact}
+                        {num.number}
                       </h4>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', num.active ? 'bg-emerald-500' : 'bg-slate-300')} />
                     </div>
                     <span className="text-[10px] font-bold text-slate-500 truncate">
-                      {conv.lastMessage?.body?.substring(0, 30) || 'No messages'}
+                      {num.label || 'Phone Number'} • {num.features.join(', ') || 'SMS/Voice'}
                     </span>
                   </div>
                 </div>
@@ -202,50 +239,17 @@ export function Dashboard() {
               </div>
             ))}
 
-            {conversations.length === 0 && (
-              <>
-                <div className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-2.5 flex items-center justify-between active:bg-slate-50 transition-colors dark:bg-slate-900 dark:border-slate-700/50">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 text-[18px] flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">🇺🇸</div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 truncate">+1 (555) 019-2834</h4>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-500 truncate">Sales Main Line • SMS/Voice</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0 ml-2">
-                    <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                    <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-2.5 flex items-center justify-between active:bg-slate-50 transition-colors dark:bg-slate-900 dark:border-slate-700/50">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 text-[18px] flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">🇬🇧</div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 truncate">+44 20 7946 0958</h4>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-500 truncate">UK Support • Voice Only</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0 ml-2">
-                    <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                    <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
-                      <MoreVertical className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </>
+            {phoneNumbers.length === 0 && (
+              <div className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-4 flex flex-col items-center justify-center text-center dark:bg-slate-900 dark:border-slate-700/50">
+                <Phone className="w-6 h-6 text-slate-300 mb-2" />
+                <p className="text-[12px] font-bold text-slate-500">No phone numbers yet</p>
+                <button
+                  onClick={() => setBuyNumberOpen(true)}
+                  className="mt-2 text-[11px] font-extrabold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  Buy your first number
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -379,8 +383,8 @@ export function Dashboard() {
                   {callCount}
                 </h3>
               </div>
-              <span className="text-sm font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded mt-3 inline-flex items-center gap-1 w-fit">
-                <TrendingUp className="w-3 h-3" /> +12%
+              <span className="text-sm font-bold text-slate-400 mt-3 inline-flex items-center gap-1 w-fit">
+                Total
               </span>
             </div>
             <div className="premium-card rounded-2xl p-5 flex flex-col justify-between">
@@ -486,28 +490,24 @@ export function Dashboard() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {conversations.slice(0, 4).map((conv) => (
+            {phoneNumbers.slice(0, 4).map((num) => (
               <div
-                key={conv.id}
+                key={num.id}
                 className="premium-card rounded-2xl p-4 flex items-center justify-between hover:shadow-md transition-all"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-                    {conv.avatar.startsWith('http') ? (
-                      <img src={conv.avatar} alt="" className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <span className="text-sm font-extrabold text-slate-600 dark:text-slate-300">{conv.avatar}</span>
-                    )}
+                    <span className="text-xl">{num.flag || '📞'}</span>
                   </div>
                   <div className="flex flex-col min-w-0">
                     <div className="flex items-center gap-2">
                       <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                        {conv.contact}
+                        {num.number}
                       </h4>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                      <span className={cn('w-2 h-2 rounded-full shrink-0', num.active ? 'bg-emerald-500' : 'bg-slate-300')} />
                     </div>
                     <span className="text-xs font-bold text-slate-500 truncate">
-                      {conv.lastMessage?.body?.substring(0, 40) || 'No messages'}
+                      {num.label || 'Phone Number'} • {num.features.join(', ') || 'SMS/Voice'}
                     </span>
                   </div>
                 </div>
@@ -522,58 +522,17 @@ export function Dashboard() {
               </div>
             ))}
 
-            {conversations.length === 0 && (
-              <>
-                <div className="premium-card rounded-2xl p-4 flex items-center justify-between hover:shadow-md transition-all">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 text-xl flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-                      🇺🇸
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                          +1 (555) 019-2834
-                        </h4>
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-500 truncate">Sales Main Line • SMS/Voice</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 shrink-0 ml-3">
-                    <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="premium-card rounded-2xl p-4 flex items-center justify-between hover:shadow-md transition-all">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-full bg-slate-100 text-xl flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-                      🇬🇧
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                          +44 20 7946 0958
-                        </h4>
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                      </div>
-                      <span className="text-xs font-bold text-slate-500 truncate">UK Support • Voice Only</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 shrink-0 ml-3">
-                    <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </>
+            {phoneNumbers.length === 0 && (
+              <div className="col-span-2 premium-card rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                <Phone className="w-8 h-8 text-slate-300 mb-3" />
+                <p className="text-sm font-bold text-slate-500">No phone numbers yet</p>
+                <button
+                  onClick={() => setBuyNumberOpen(true)}
+                  className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-extrabold hover:bg-indigo-500 transition-colors"
+                >
+                  Buy your first number
+                </button>
+              </div>
             )}
           </div>
         </div>

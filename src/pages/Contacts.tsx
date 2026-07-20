@@ -1,4 +1,4 @@
-import { useState, useMemo, memo } from 'react';
+import { useState, useMemo, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -16,6 +16,7 @@ import {
 import { useAppStore } from '../store/appStore';
 import { cn } from '../lib/utils';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+import { fetchContacts, insertContact, type ContactRecord } from '../lib/contacts';
 
 interface Contact {
   id: string;
@@ -30,17 +31,24 @@ interface Contact {
   online?: boolean;
 }
 
-const initialContacts: Contact[] = [
-  { id: '1', name: 'Aria Martinez', email: 'aria.m@europe.com', company: 'Europe', number: '+44 20 7946 0958', phoneType: 'Mobile', initials: 'AM', avatarColor: 'bg-purple-50 text-purple-600 border-purple-100' },
-  { id: '2', name: 'Elena Rodriguez', email: 'elena.r@techflow.io', company: 'TechFlow Systems', number: '+1 (555) 012-3456', phoneType: 'Mobile', initials: 'ER', avatarColor: 'bg-indigo-50 text-indigo-600 border-indigo-100', online: true },
-  { id: '3', name: 'Marcus Thorne', email: 'm.thorne@glocapital.com', company: 'Global Capital Partners', number: '+44 20 7946 0123', phoneType: 'Office', initials: 'MT', avatarColor: 'bg-emerald-50 text-emerald-600 border-emerald-100' },
-  { id: '4', name: 'Sarah Jenkins', email: 'sarah.j@pixelperfect.design', company: 'PixelPerfect Design', number: '+1 (555) 987-6543', phoneType: 'Personal', initials: 'SJ', avatarColor: 'bg-amber-50 text-amber-600 border-amber-100', favorite: true },
-  { id: '5', name: 'Alice Johnson', email: 'alice@example.com', company: 'Acme Corp', number: '+1 (555) 123-4567', phoneType: 'Mobile', initials: 'AJ', avatarColor: 'bg-blue-50 text-blue-600 border-blue-100' },
-  { id: '6', name: 'Bob Smith', email: 'bob@example.com', company: 'Smith Logistics', number: '+1 (555) 234-5678', phoneType: 'Office', initials: 'BS', avatarColor: 'bg-orange-50 text-orange-600 border-orange-100' },
-  { id: '7', name: 'Carol White', email: 'carol@example.com', company: 'White & Co', number: '+1 (555) 345-6789', phoneType: 'Mobile', initials: 'CW', avatarColor: 'bg-pink-50 text-pink-600 border-pink-100', favorite: true },
-  { id: '8', name: 'David Lee', email: 'david@example.com', company: 'NextGen Labs', number: '+1 (555) 456-7890', phoneType: 'Office', initials: 'DL', avatarColor: 'bg-teal-50 text-teal-600 border-teal-100' },
-  { id: '9', name: 'Jordan Davids', email: 'jordan@davids.com', company: 'Freelance', number: '+1 (555) 012-3456', phoneType: 'Mobile', initials: 'JD', avatarColor: 'bg-indigo-50 text-indigo-600 border-indigo-100' },
-];
+const AVATAR_COLORS = ['bg-indigo-50 text-indigo-600 border-indigo-100', 'bg-purple-50 text-purple-600 border-purple-100', 'bg-emerald-50 text-emerald-600 border-emerald-100', 'bg-amber-50 text-amber-600 border-amber-100', 'bg-blue-50 text-blue-600 border-blue-100'];
+
+function contactFromRecord(rec: ContactRecord): Contact {
+  const name = `${rec.first_name} ${rec.last_name}`.trim() || 'Unknown';
+  const initials = `${rec.first_name[0] ?? ''}${rec.last_name[0] ?? ''}`.toUpperCase() || 'UN';
+  const colorIdx = rec.id.charCodeAt(0) % AVATAR_COLORS.length;
+  return {
+    id: rec.id,
+    name,
+    email: rec.email || '',
+    company: rec.company || '',
+    number: rec.phone,
+    phoneType: 'Mobile',
+    initials,
+    avatarColor: AVATAR_COLORS[colorIdx],
+    favorite: rec.favorite,
+  };
+}
 
 type FilterTab = 'all' | 'favorites' | 'recent';
 
@@ -50,12 +58,22 @@ export function Contacts() {
   const [addContactModal, setAddContactModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [newContact, setNewContact] = useState({ firstName: '', lastName: '', phone: '', email: '', company: '' });
-  const [contacts, setContacts] = useState(initialContacts);
+  const [contacts, setContacts] = useState<Contact[]>([]);
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
   const setActiveConversation = useAppStore((s) => s.setActiveConversation);
   const conversations = useAppStore((s) => s.conversations);
+
+  useEffect(() => {
+    const load = async () => {
+      const records = await fetchContacts();
+      setContacts(records.map(contactFromRecord));
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
     let result = contacts.filter(
@@ -96,23 +114,19 @@ export function Contacts() {
     navigate('/calls', { state: { dialNumber: number } });
   };
 
-  const handleSaveContact = () => {
+  const handleSaveContact = async () => {
     setSaving(true);
-    setTimeout(() => {
-      const name = `${newContact.firstName} ${newContact.lastName}`.trim();
-      const initials = `${newContact.firstName[0] ?? ''}${newContact.lastName[0] ?? ''}`.toUpperCase();
-      const colors = ['bg-indigo-50 text-indigo-600 border-indigo-100', 'bg-purple-50 text-purple-600 border-purple-100', 'bg-emerald-50 text-emerald-600 border-emerald-100', 'bg-amber-50 text-amber-600 border-amber-100', 'bg-blue-50 text-blue-600 border-blue-100'];
-      const newEntry: Contact = {
-        id: Date.now().toString(),
-        name: name || 'Unknown',
-        email: newContact.email,
-        company: newContact.company,
-        number: newContact.phone,
-        phoneType: 'Mobile',
-        initials: initials || 'UN',
-        avatarColor: colors[Math.floor(Math.random() * colors.length)],
-      };
-      setContacts((prev) => [...prev, newEntry]);
+    try {
+      const record = await insertContact(
+        newContact.firstName.trim(),
+        newContact.lastName.trim(),
+        newContact.phone.trim(),
+        newContact.email.trim(),
+        newContact.company.trim()
+      );
+      if (record) {
+        setContacts((prev) => [...prev, contactFromRecord(record)]);
+      }
       setSaving(false);
       setSaved(true);
       setTimeout(() => {
@@ -120,7 +134,9 @@ export function Contacts() {
         setAddContactModal(false);
         setNewContact({ firstName: '', lastName: '', phone: '', email: '', company: '' });
       }, 1000);
-    }, 1200);
+    } catch {
+      setSaving(false);
+    }
   };
 
   return (
@@ -151,7 +167,19 @@ export function Contacts() {
 
             {/* Mobile Contacts List */}
             <div className="animate-fade-in animate-delay-100 shrink-0 flex flex-col gap-4 mt-1">
-              {filtered.length === 0 ? (
+              {loading ? (
+                <div className="flex flex-col gap-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="bg-white border border-slate-200/80 rounded-[20px] p-3 flex items-center gap-3 dark:bg-slate-900 dark:border-slate-700/50">
+                      <div className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-32 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                        <div className="h-2 w-24 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3 dark:bg-slate-800">
                     <UserPlus className="w-7 h-7 text-slate-300 dark:text-slate-600" />
@@ -222,7 +250,19 @@ export function Contacts() {
               </div>
               <span className="text-[12px] font-medium text-slate-500 ml-auto dark:text-slate-400">{filtered.length} contacts found</span>
             </div>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="grid grid-cols-2 gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="bg-white border border-slate-200/80 rounded-[20px] p-4 flex items-center gap-3 dark:bg-slate-900 dark:border-slate-700/50">
+                    <div className="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-32 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                      <div className="h-2 w-24 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-24 text-center">
                 <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-4 dark:bg-slate-800">
                   <UserPlus className="w-9 h-9 text-slate-300 dark:text-slate-600" />

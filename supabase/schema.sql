@@ -276,3 +276,79 @@ drop trigger if exists phone_numbers_updated_at on public.phone_numbers;
 create trigger phone_numbers_updated_at
   before update on public.phone_numbers
   for each row execute procedure public.handle_updated_at();
+
+-- ------------------------------------------------------------
+-- 7. Contacts
+--    Stores personal contacts for each user.
+-- ------------------------------------------------------------
+create table if not exists public.contacts (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  first_name text not null default '',
+  last_name text not null default '',
+  phone text not null,
+  email text default '',
+  company text default '',
+  favorite boolean default false,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+alter table public.contacts enable row level security;
+
+drop policy if exists "Users can read own contacts" on public.contacts;
+create policy "Users can read own contacts"
+  on public.contacts for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own contacts" on public.contacts;
+create policy "Users can insert own contacts"
+  on public.contacts for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own contacts" on public.contacts;
+create policy "Users can update own contacts"
+  on public.contacts for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own contacts" on public.contacts;
+create policy "Users can delete own contacts"
+  on public.contacts for delete
+  using (auth.uid() = user_id);
+
+drop trigger if exists contacts_updated_at on public.contacts;
+create trigger contacts_updated_at
+  before update on public.contacts
+  for each row execute procedure public.handle_updated_at();
+
+-- ------------------------------------------------------------
+-- 8. Call logs
+--    Records metadata for every call made or received.
+-- ------------------------------------------------------------
+create table if not exists public.call_logs (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  remote_identity text not null,
+  direction text not null default 'outgoing',
+  type text not null default 'outgoing',
+  duration_seconds integer not null default 0,
+  recorded boolean default false,
+  created_at timestamp with time zone default now()
+);
+
+alter table public.call_logs enable row level security;
+
+drop policy if exists "Users can read own call_logs" on public.call_logs;
+create policy "Users can read own call_logs"
+  on public.call_logs for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own call_logs" on public.call_logs;
+create policy "Users can insert own call_logs"
+  on public.call_logs for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own call_logs" on public.call_logs;
+create policy "Users can delete own call_logs"
+  on public.call_logs for delete
+  using (auth.uid() = user_id);

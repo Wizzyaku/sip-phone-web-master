@@ -29,6 +29,7 @@ import { cn } from '../lib/utils';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { LowBalanceModal } from '../components/LowBalanceModal';
 import { hasEnoughBalance } from '../lib/balance';
+import { fetchCallLogs, insertCallLog, type CallLogRecord } from '../lib/callLogs';
 
 const keypad = [
   { digit: '1', sub: '' },
@@ -101,18 +102,29 @@ export function Calls() {
   const [lowBalanceOpen, setLowBalanceOpen] = useState(false);
   const [dialerOpen, setDialerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [callHistory, setCallHistory] = useState<CallRecord[]>([
-    { id: '1', name: 'Elena Rodriguez', phone: '+1 (555) 234-5678', time: '10:42 AM', duration: '0m 00s', type: 'missed', recorded: false, date: new Date(Date.now() - 1000 * 60 * 60 * 2) },
-    { id: '2', name: '+1 (555) 019-2834', phone: '+1 (555) 019-2834', time: '09:15 AM', duration: '4m 12s', type: 'incoming', recorded: false, date: new Date(Date.now() - 1000 * 60 * 60 * 4) },
-    { id: '3', name: 'Marcus Thorne', phone: '+1 (555) 111-2233', time: '4:30 PM', duration: '12m 05s', type: 'outgoing', recorded: false, date: new Date(Date.now() - 1000 * 60 * 60 * 28) },
-    { id: '4', name: '+44 20 7946 0958', phone: '+44 20 7946 0958', time: '1:15 PM', duration: '0m 45s', type: 'voicemail', recorded: false, date: new Date(Date.now() - 1000 * 60 * 60 * 30) },
-    { id: '5', name: 'Sarah Jenkins', phone: '+1 (555) 098-7654', time: 'Oct 12', duration: '12m 45s', type: 'incoming', recorded: true, date: new Date(Date.now() - 1000 * 60 * 60 * 48) },
-    { id: '6', name: 'Marketing Sync', phone: '+1 (555) 111-2233', time: 'Oct 12', duration: '45m 00s', type: 'outgoing', recorded: true, date: new Date(Date.now() - 1000 * 60 * 60 * 50) },
-  ]);
+  const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setRecentLoading(false), 1200);
-    return () => window.clearTimeout(timer);
+    const load = async () => {
+      const logs = await fetchCallLogs(50);
+      const records: CallRecord[] = logs.map((log) => {
+        const mins = Math.floor(log.duration_seconds / 60);
+        const secs = log.duration_seconds % 60;
+        return {
+          id: log.id,
+          name: log.remote_identity,
+          phone: log.remote_identity,
+          time: formatCallTime(new Date(log.created_at)),
+          duration: `${mins}m ${secs.toString().padStart(2, '0')}s`,
+          type: log.type,
+          recorded: log.recorded,
+          date: new Date(log.created_at),
+        };
+      });
+      setCallHistory(records);
+      setRecentLoading(false);
+    };
+    load();
   }, []);
 
   useEffect(() => {
@@ -137,19 +149,19 @@ export function Calls() {
       const mins = Math.floor(durationSeconds / 60);
       const secs = durationSeconds % 60;
       const durationStr = `${mins}m ${secs.toString().padStart(2, '0')}s`;
-      setCallHistory((prev) => [
-        {
-          id: crypto.randomUUID(),
-          name: ended.remoteIdentity,
-          phone: ended.remoteIdentity,
-          time: formatCallTime(new Date()),
-          duration: durationStr,
-          type: ended.direction === 'incoming' && durationSeconds === 0 ? 'missed' : ended.direction,
-          recorded: false,
-          date: new Date(),
-        },
-        ...prev,
-      ]);
+      const callType = ended.direction === 'incoming' && durationSeconds === 0 ? 'missed' : ended.direction;
+      const newRecord: CallRecord = {
+        id: crypto.randomUUID(),
+        name: ended.remoteIdentity,
+        phone: ended.remoteIdentity,
+        time: formatCallTime(new Date()),
+        duration: durationStr,
+        type: callType,
+        recorded: false,
+        date: new Date(),
+      };
+      setCallHistory((prev) => [newRecord, ...prev]);
+      insertCallLog(ended.remoteIdentity, ended.direction, callType, durationSeconds, false);
     }
     prevActiveCallRef.current = activeCall;
   }, [activeCall]);
@@ -223,7 +235,7 @@ export function Calls() {
     call(target);
   };
 
-  const activeLine = telnyxNumber || settings.phoneNumber || '+1 (555) 012-3456';
+  const activeLine = telnyxNumber || settings.phoneNumber || 'No number assigned';
 
   const tabs: { id: RecentFilter; label: string }[] = [
     { id: 'all', label: 'All' },

@@ -1,4 +1,4 @@
-import { useMemo, memo } from 'react';
+import { useMemo, memo, useState, useEffect } from 'react';
 import {
   Phone,
   MessageSquare,
@@ -11,110 +11,195 @@ import {
   MoreVertical,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useAppStore } from '../store/appStore';
+import { fetchCallLogs, type CallLogRecord } from '../lib/callLogs';
+import { fetchTransactions, formatTokens, type Transaction } from '../lib/balance';
 
-const kpiData = [
-  {
-    label: 'Call Minutes',
-    value: '14,282',
-    change: '+12%',
-    trend: 'up' as const,
-    icon: Phone,
-    iconBg: 'bg-indigo-50 text-indigo-600',
-  },
-  {
-    label: 'SMS Sent',
-    value: '8,419',
-    change: '+4.5%',
-    trend: 'up' as const,
-    icon: MessageSquare,
-    iconBg: 'bg-purple-50 text-purple-600',
-  },
-  {
-    label: 'Avg Duration',
-    value: '4m 12s',
-    change: '-2.1%',
-    trend: 'down' as const,
-    icon: Clock,
-    iconBg: 'bg-amber-50 text-amber-600',
-  },
-  {
-    label: 'Tokens Used',
-    value: '38.1k',
-    change: 'Target: 50k',
-    trend: 'neutral' as const,
-    icon: Coins,
-    iconBg: 'bg-slate-100 text-slate-600',
-    progress: 76,
-  },
-];
+const AVATAR_COLORS = ['bg-indigo-50 text-indigo-600', 'bg-purple-50 text-purple-600', 'bg-amber-50 text-amber-600', 'bg-emerald-50 text-emerald-600', 'bg-blue-50 text-blue-600'];
 
-const topContacts = [
-  {
-    id: '1',
-    initials: 'JD',
-    color: 'bg-indigo-50 text-indigo-600',
-    name: 'Jordan Davids',
-    volume: '1,242 Calls • N. America',
-    duration: '42h 15m',
-    trend: '+18%',
-    trendUp: true,
-  },
-  {
-    id: '2',
-    initials: 'AM',
-    color: 'bg-purple-50 text-purple-600',
-    name: 'Aria Martinez',
-    volume: '892 Calls • Europe',
-    duration: '28h 05m',
-    trend: '+12%',
-    trendUp: true,
-  },
-  {
-    id: '3',
-    initials: 'LK',
-    color: 'bg-amber-50 text-amber-600',
-    name: 'Lian Kim',
-    volume: '754 Calls • APAC',
-    duration: '19h 42m',
-    trend: '-4%',
-    trendUp: false,
-  },
-];
-
-const geographicData = [
-  { region: 'United States', percent: 42 },
-  { region: 'United Kingdom', percent: 28 },
-  { region: 'Canada', percent: 15 },
-  { region: 'Australia', percent: 10 },
-];
-
-const tokenBreakdown = [
-  { label: 'Voice Calls', percent: 65, color: 'bg-indigo-500' },
-  { label: 'SMS Volume', percent: 25, color: 'bg-purple-500' },
-  { label: 'Sub/Other', percent: 10, color: 'bg-slate-200' },
-];
-
-function getHeatmapClass(value: number) {
-  if (value > 85) return 'bg-indigo-600';
-  if (value > 60) return 'bg-indigo-400';
-  if (value > 30) return 'bg-indigo-200';
+function getHeatmapClass(value: number, max: number) {
+  if (max === 0) return 'bg-indigo-50';
+  const pct = (value / max) * 100;
+  if (pct > 75) return 'bg-indigo-600';
+  if (pct > 50) return 'bg-indigo-400';
+  if (pct > 25) return 'bg-indigo-200';
   return 'bg-indigo-50';
 }
 
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function getRegionFromPhone(phone: string): string {
+  if (phone.startsWith('+1') || phone.startsWith('1')) return 'N. America';
+  if (phone.startsWith('+44') || phone.startsWith('44')) return 'Europe';
+  if (phone.startsWith('+61') || phone.startsWith('+64') || phone.startsWith('+81') || phone.startsWith('+82') || phone.startsWith('+86')) return 'APAC';
+  if (phone.startsWith('+234') || phone.startsWith('+27')) return 'Africa';
+  return 'Other';
+}
+
 export function Usage() {
+  const messages = useAppStore((s) => s.messages);
+  const [callLogs, setCallLogs] = useState<CallLogRecord[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const [logs, txns] = await Promise.all([
+        fetchCallLogs(100),
+        fetchTransactions(),
+      ]);
+      setCallLogs(logs);
+      setTransactions(txns);
+    };
+    load();
+  }, []);
+
+  const stats = useMemo(() => {
+    const callMinutes = Math.floor(callLogs.reduce((sum, c) => sum + c.duration_seconds, 0) / 60);
+    const smsSent = messages.filter((m) => m.type === 'text' && m.direction === 'outbound').length;
+    const completedCalls = callLogs.filter((c) => c.type !== 'missed');
+    const avgSeconds = completedCalls.length > 0
+      ? Math.round(completedCalls.reduce((sum, c) => sum + c.duration_seconds, 0) / completedCalls.length)
+      : 0;
+    const avgMins = Math.floor(avgSeconds / 60);
+    const avgSecs = avgSeconds % 60;
+    const tokensUsed = transactions
+      .filter((t) => t.status === 'success')
+      .reduce((sum, t) => sum + t.tokens, 0);
+    const tokenTarget = 50000;
+    const tokenProgress = tokenTarget > 0 ? Math.min(100, Math.round((tokensUsed / tokenTarget) * 100)) : 0;
+
+    return {
+      callMinutes,
+      smsSent,
+      avgDuration: `${avgMins}m ${avgSecs.toString().padStart(2, '0')}s`,
+      tokensUsed,
+      tokenProgress,
+      tokenTarget,
+    };
+  }, [callLogs, messages, transactions]);
+
+  const kpiData = useMemo(() => [
+    {
+      label: 'Call Minutes',
+      value: stats.callMinutes.toLocaleString(),
+      change: '',
+      trend: 'neutral' as const,
+      icon: Phone,
+      iconBg: 'bg-indigo-50 text-indigo-600',
+    },
+    {
+      label: 'SMS Sent',
+      value: stats.smsSent.toLocaleString(),
+      change: '',
+      trend: 'neutral' as const,
+      icon: MessageSquare,
+      iconBg: 'bg-purple-50 text-purple-600',
+    },
+    {
+      label: 'Avg Duration',
+      value: stats.avgDuration,
+      change: '',
+      trend: 'neutral' as const,
+      icon: Clock,
+      iconBg: 'bg-amber-50 text-amber-600',
+    },
+    {
+      label: 'Tokens Used',
+      value: formatTokens(stats.tokensUsed),
+      change: `Target: ${formatTokens(stats.tokenTarget)}`,
+      trend: 'neutral' as const,
+      icon: Coins,
+      iconBg: 'bg-slate-100 text-slate-600',
+      progress: stats.tokenProgress,
+    },
+  ], [stats]);
+
+  const topContacts = useMemo(() => {
+    const contactMap = new Map<string, { count: number; duration: number; region: string }>();
+    for (const c of callLogs) {
+      const existing = contactMap.get(c.remote_identity) || { count: 0, duration: 0, region: getRegionFromPhone(c.remote_identity) };
+      existing.count++;
+      existing.duration += c.duration_seconds;
+      contactMap.set(c.remote_identity, existing);
+    }
+    return Array.from(contactMap.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5)
+      .map(([phone, data], i) => {
+        const initials = phone.replace(/\D/g, '').slice(0, 2) || 'UN';
+        return {
+          id: phone,
+          initials,
+          color: AVATAR_COLORS[i % AVATAR_COLORS.length],
+          name: phone,
+          volume: `${data.count} Calls • ${data.region}`,
+          duration: formatDuration(data.duration),
+          trend: '',
+          trendUp: true,
+        };
+      });
+  }, [callLogs]);
+
+  const geographicData = useMemo(() => {
+    const regionMap = new Map<string, number>();
+    for (const c of callLogs) {
+      const region = getRegionFromPhone(c.remote_identity);
+      regionMap.set(region, (regionMap.get(region) || 0) + 1);
+    }
+    const total = callLogs.length || 1;
+    return Array.from(regionMap.entries())
+      .map(([region, count]) => ({ region, percent: Math.round((count / total) * 100) }))
+      .sort((a, b) => b.percent - a.percent)
+      .slice(0, 4);
+  }, [callLogs]);
+
+  const tokenBreakdown = useMemo(() => {
+    const callCount = callLogs.length;
+    const smsCount = messages.filter((m) => m.type === 'text').length;
+    const total = callCount + smsCount || 1;
+    const callPct = Math.round((callCount / total) * 100);
+    const smsPct = Math.round((smsCount / total) * 100);
+    const otherPct = Math.max(0, 100 - callPct - smsPct);
+    return [
+      { label: 'Voice Calls', percent: callPct, color: 'bg-indigo-500' },
+      { label: 'SMS Volume', percent: smsPct, color: 'bg-purple-500' },
+      { label: 'Sub/Other', percent: otherPct, color: 'bg-slate-200' },
+    ];
+  }, [callLogs, messages]);
+
   const heatmapData = useMemo(() => {
     const rows = 7;
     const cols = 24;
-    const data: number[][] = [];
-    for (let r = 0; r < rows; r++) {
-      const row: number[] = [];
-      for (let c = 0; c < cols; c++) {
-        row.push(Math.floor(Math.random() * 100));
-      }
-      data.push(row);
+    const data: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+    for (const c of callLogs) {
+      const d = new Date(c.created_at);
+      const day = d.getDay();
+      const hour = d.getHours();
+      data[day][hour]++;
+    }
+    for (const m of messages) {
+      const d = new Date(m.createdAt);
+      const day = d.getDay();
+      const hour = d.getHours();
+      data[day][hour]++;
     }
     return data;
-  }, []);
+  }, [callLogs, messages]);
+
+  const heatmapMax = useMemo(() => {
+    return Math.max(...heatmapData.flat(), 1);
+  }, [heatmapData]);
+
+  const totalBreakdown = useMemo(() => {
+    const callCount = callLogs.length;
+    const smsCount = messages.filter((m) => m.type === 'text').length;
+    return callCount + smsCount;
+  }, [callLogs, messages]);
 
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#F0F4F8] dark:bg-slate-950">
@@ -206,12 +291,12 @@ export function Usage() {
         <div className="shrink-0 animate-fade-in animate-delay-300 bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-3.5 dark:bg-slate-900 dark:border-slate-700/50">
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-[14px] font-bold text-slate-800 dark:text-slate-100">Usage Breakdown</h4>
-            <span className="text-[12px] font-extrabold text-slate-800 dark:text-slate-100">38k <span className="text-[9px] text-slate-400 font-bold">Total</span></span>
+            <span className="text-[12px] font-extrabold text-slate-800 dark:text-slate-100">{totalBreakdown} <span className="text-[9px] text-slate-400 font-bold">Total</span></span>
           </div>
           <div className="w-full h-3 flex rounded-full overflow-hidden mb-3">
-            <div className="w-[65%] bg-indigo-500" />
-            <div className="w-[25%] bg-purple-500" />
-            <div className="w-[10%] bg-slate-200" />
+            <div className="bg-indigo-500" style={{ width: `${tokenBreakdown[0].percent}%` }} />
+            <div className="bg-purple-500" style={{ width: `${tokenBreakdown[1].percent}%` }} />
+            <div className="bg-slate-200" style={{ width: `${tokenBreakdown[2].percent}%` }} />
           </div>
           <div className="grid grid-cols-3 gap-2">
             {tokenBreakdown.map((item) => (
@@ -236,7 +321,7 @@ export function Usage() {
             <div className="min-w-[340px]">
               <div className="grid gap-[2px] h-24 mb-1.5" style={{ gridTemplateColumns: 'repeat(24, 1fr)' }}>
                 {heatmapData.flat().map((value, i) => (
-                  <div key={i} className={cn('w-full h-full rounded-[1px]', getHeatmapClass(value))} />
+                  <div key={i} className={cn('w-full h-full rounded-[1px]', getHeatmapClass(value, heatmapMax))} />
                 ))}
               </div>
               <div className="flex justify-between text-[8px] font-extrabold text-slate-400 uppercase tracking-widest px-0.5">
@@ -253,7 +338,12 @@ export function Usage() {
             <button className="text-[10px] font-extrabold text-indigo-600">View All</button>
           </div>
           <div className="bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-2 flex flex-col divide-y divide-slate-100 dark:bg-slate-900 dark:border-slate-700/50 dark:divide-slate-700">
-            {topContacts.map((contact) => (
+            {topContacts.length === 0 ? (
+              <div className="p-6 text-center">
+                <p className="text-[12px] font-bold text-slate-400">No call data yet</p>
+                <p className="text-[10px] text-slate-400 mt-1">Top contacts will appear here once you start making calls.</p>
+              </div>
+            ) : topContacts.map((contact) => (
               <div key={contact.id} className="p-2 flex items-center justify-between active:bg-slate-50 rounded-xl transition-colors dark:hover:bg-slate-800">
                 <div className="flex items-center gap-2.5">
                   <div className={cn('w-9 h-9 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0', contact.color)}>
@@ -376,12 +466,12 @@ export function Usage() {
           <div className="col-span-1 premium-card rounded-2xl p-6 flex flex-col h-[380px]">
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">Usage Breakdown</h4>
-              <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">38k <span className="text-xs text-slate-400 font-bold">Total</span></span>
+              <span className="text-sm font-extrabold text-slate-800 dark:text-slate-100">{totalBreakdown} <span className="text-xs text-slate-400 font-bold">Total</span></span>
             </div>
             <div className="w-full h-4 flex rounded-full overflow-hidden mb-6">
-              <div className="w-[65%] bg-indigo-500" />
-              <div className="w-[25%] bg-purple-500" />
-              <div className="w-[10%] bg-slate-200" />
+              <div className="bg-indigo-500" style={{ width: `${tokenBreakdown[0].percent}%` }} />
+              <div className="bg-purple-500" style={{ width: `${tokenBreakdown[1].percent}%` }} />
+              <div className="bg-slate-200" style={{ width: `${tokenBreakdown[2].percent}%` }} />
             </div>
             <div className="flex flex-col gap-4 flex-1 justify-center">
               {tokenBreakdown.map((item) => (
@@ -418,7 +508,7 @@ export function Usage() {
               <div className="min-w-[480px]">
                 <div className="grid gap-[3px] h-32 mb-2" style={{ gridTemplateColumns: 'repeat(24, 1fr)' }}>
                   {heatmapData.flat().map((value, i) => (
-                    <div key={i} className={cn('w-full h-full rounded-[2px] transition-transform hover:scale-125 cursor-pointer', getHeatmapClass(value))} />
+                    <div key={i} className={cn('w-full h-full rounded-[2px] transition-transform hover:scale-125 cursor-pointer', getHeatmapClass(value, heatmapMax))} />
                   ))}
                 </div>
                 <div className="flex justify-between text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-0.5">
@@ -436,7 +526,9 @@ export function Usage() {
                 <Globe className="h-16 w-16 text-indigo-400/40" />
               </div>
               <div className="flex flex-col justify-center gap-4">
-                {geographicData.map((item) => (
+                {geographicData.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-8">No geographic data yet</p>
+                ) : geographicData.map((item) => (
                   <div key={item.region} className="space-y-1.5">
                     <div className="flex justify-between text-sm font-bold text-slate-600 dark:text-slate-300">
                       <span>{item.region}</span>
@@ -471,7 +563,14 @@ export function Usage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                {topContacts.map((contact) => (
+                {topContacts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <p className="text-sm font-bold text-slate-400">No call data yet</p>
+                      <p className="text-xs text-slate-400 mt-1">Top contacts will appear here once you start making calls.</p>
+                    </td>
+                  </tr>
+                ) : topContacts.map((contact) => (
                   <tr key={contact.id} className="group transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
