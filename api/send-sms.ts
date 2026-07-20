@@ -9,7 +9,6 @@ export const config = {
 };
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
-const TELNYX_PHONE_NUMBER = process.env.TELNYX_PHONE_NUMBER ?? '';
 const LOW_BALANCE_THRESHOLD = 10;
 
 function normalizePhone(number: string): string {
@@ -79,16 +78,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const to = body.to as string | undefined;
   const messageBody = body.body as string | undefined;
   const rawFrom = body.from as string | undefined;
-  const fromNumber = rawFrom ? normalizePhone(rawFrom) : TELNYX_PHONE_NUMBER;
 
-  console.log('Send SMS request. to:', to, 'from:', fromNumber, 'body:', messageBody);
+  console.log('Send SMS request. to:', to, 'from:', rawFrom, 'body:', messageBody);
   if (!to || !messageBody) {
     res.status(400).json({ error: 'Missing "to" or "body"' });
     return;
   }
 
-  if (!fromNumber) {
-    res.status(400).json({ error: 'Missing sender number. Set TELNYX_PHONE_NUMBER or provide "from" in the request.' });
+  if (!rawFrom) {
+    res.status(400).json({ error: 'Missing "from" number.' });
+    return;
+  }
+
+  const fromNumber = normalizePhone(rawFrom);
+
+  // Verify the from number belongs to the authenticated user
+  const { data: phoneRows, error: phoneError } = await serverClient
+    .from('phone_numbers')
+    .select('number')
+    .eq('user_id', userData.user.id);
+
+  if (phoneError) {
+    console.error('Failed to fetch user phone numbers:', phoneError);
+    res.status(500).json({ error: 'Failed to verify sender number.' });
+    return;
+  }
+
+  const userNumbers = (phoneRows || []).map((row: { number: string }) => row.number.replace(/\D/g, ''));
+  if (!userNumbers.includes(fromNumber.replace(/\D/g, ''))) {
+    res.status(403).json({ error: 'You do not own this phone number.' });
     return;
   }
 
