@@ -122,7 +122,7 @@ export function Home() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-2">
-              <img src="/phonicity.png" alt="Phonicity" className="h-10 w-10 object-contain rounded-md" />
+              <img src="/phonicity2.png" alt="Phonicity" className="h-10 w-10 object-contain rounded-md" />
               <span className="text-xl font-bold text-primary tracking-tight">Phonicity</span>
             </div>
 
@@ -524,7 +524,7 @@ export function Home() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
-                <img src="/phonicity.png" alt="Phonicity" className="h-9 w-9 object-contain rounded-md" />
+                <img src="/phonicity2.png" alt="Phonicity" className="h-9 w-9 object-contain rounded-md" />
                 <span className="text-lg font-bold text-primary">Phonicity</span>
               </div>
               <p className="text-sm text-muted-foreground max-w-xs">

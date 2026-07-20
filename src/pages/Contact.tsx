@@ -30,7 +30,7 @@ export function Contact() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
-              <img src="/phonicity.png" alt="Phonicity" className="h-10 w-10 object-contain rounded-md" />
+              <img src="/phonicity2.png" alt="Phonicity" className="h-10 w-10 object-contain rounded-md" />
               <span className="text-xl font-bold text-primary tracking-tight">Phonicity</span>
             </Link>
             <div className="hidden md:flex items-center gap-3">
@@ -228,7 +228,7 @@ export function Contact() {
       <footer className="border-t border-border py-8">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/phonicity.png" alt="Phonicity" className="h-8 w-8 object-contain rounded-md" />
+            <img src="/phonicity2.png" alt="Phonicity" className="h-8 w-8 object-contain rounded-md" />
             <span className="text-lg font-bold text-primary">Phonicity</span>
           </Link>
           <p className="text-sm text-muted-foreground">© 2024 Phonicity. All rights reserved.</p>
