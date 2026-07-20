@@ -52,7 +52,6 @@ function buildTrend(callLogs: CallLogRecord[], messages: { createdAt: string; ty
 
 export function Dashboard() {
   const messages = useAppStore((s) => s.messages);
-  const conversations = useAppStore((s) => s.conversations);
   const user = useAppStore((s) => s.user);
   const balance = useAppStore((s) => s.balance);
   const balanceLoading = useAppStore((s) => s.balanceLoading);

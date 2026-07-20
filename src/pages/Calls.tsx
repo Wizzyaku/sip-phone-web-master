@@ -29,7 +29,7 @@ import { cn } from '../lib/utils';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { LowBalanceModal } from '../components/LowBalanceModal';
 import { hasEnoughBalance } from '../lib/balance';
-import { fetchCallLogs, insertCallLog, type CallLogRecord } from '../lib/callLogs';
+import { fetchCallLogs, insertCallLog } from '../lib/callLogs';
 
 const keypad = [
   { digit: '1', sub: '' },
