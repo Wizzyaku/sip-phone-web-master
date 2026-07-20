@@ -1,4 +1,4 @@
-# SIP Phone + SMS Web App
+# Phonicity — Cloud Telephony Platform
 
 A Vite React web app with browser-based SIP calling (via SIP.js and Telnyx WebRTC) and carrier SMS (via Telnyx and Vercel serverless functions).
 
