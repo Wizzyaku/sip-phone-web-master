@@ -46,10 +46,13 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-const sessions = [
-  { id: '1', device: 'MacBook Pro 16"', icon: Laptop, location: 'London, UK', ip: '192.168.1.45', current: true },
-  { id: '2', device: 'iPhone 15 Pro', icon: Smartphone, location: 'Paris, FR', ip: '82.14.99.102', current: false },
-];
+const currentSession = {
+  id: 'current',
+  device: typeof navigator !== 'undefined' && /Mobile|Android|iPhone/.test(navigator.userAgent) ? 'Mobile Device' : 'Desktop Browser',
+  icon: typeof navigator !== 'undefined' && /Mobile|Android|iPhone/.test(navigator.userAgent) ? Smartphone : Laptop,
+  location: 'Current Session',
+  current: true,
+};
 
 export function Settings() {
   const navigate = useNavigate();
@@ -77,7 +80,7 @@ export function Settings() {
   const [clearNotifModal, setClearNotifModal] = useState(false);
   const isDesktop = useIsDesktop();
 
-  const accountNumber = '#PRO-8892-XKB-001';
+  const accountNumber = user.email ? `#${user.email.split('@')[0].toUpperCase().slice(0, 8)}` : '#USER';
 
   const handleSave = async () => {
     const updatedUser = { ...user, ...draft, avatar: getInitials(draft.name) };
@@ -102,7 +105,16 @@ export function Settings() {
     setVerifying(true);
     setVerifyStatus(null);
     try {
-      const res = await axios.post(`${API_URL}/verify-number`, { phoneNumber: raw });
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) {
+        setVerifyStatus({ type: 'error', message: 'You must be signed in.' });
+        setVerifying(false);
+        return;
+      }
+      const res = await axios.post(`${API_URL}/verify-number`, { phoneNumber: raw }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       if (res.data.valid) {
         setVerifyStatus({ type: 'success', message: `${res.data.phoneNumber} is verified and active.` });
       } else {
@@ -167,7 +179,7 @@ export function Settings() {
                 <h2 className="text-[18px] font-extrabold text-slate-800 leading-tight truncate dark:text-slate-100">{user.name}</h2>
                 <p className="text-[12px] font-medium text-slate-500 truncate dark:text-slate-400">{user.email}</p>
                 <div className="mt-1.5 flex items-center gap-1.5">
-                  <span className="px-2 py-0.5 rounded-[6px] text-[9px] font-extrabold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-400">Enterprise</span>
+                  <span className="px-2 py-0.5 rounded-[6px] text-[9px] font-extrabold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-400">Personal</span>
                   <span className="text-[10px] font-bold text-slate-400 border-l border-slate-200 pl-1.5 dark:border-slate-700">ID: {accountNumber}</span>
                 </div>
               </div>
@@ -286,12 +298,12 @@ export function Settings() {
                 {/* Two-Factor Auth */}
                 <div className="p-2 flex items-center justify-between group active:bg-slate-50 rounded-[14px] transition-colors cursor-pointer dark:active:bg-slate-800">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-[10px] bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0 dark:bg-emerald-900/20 dark:text-emerald-400">
+                    <div className="w-9 h-9 rounded-[10px] bg-slate-50 flex items-center justify-center text-slate-500 shrink-0 dark:bg-slate-800 dark:text-slate-400">
                       <ShieldCheck className="w-4 h-4" />
                     </div>
                     <div className="flex flex-col">
                       <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Two-Factor Auth</span>
-                      <span className="text-[9px] font-bold text-emerald-500">Currently Active</span>
+                      <span className="text-[9px] font-bold text-slate-400">Not Enabled</span>
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
@@ -508,7 +520,7 @@ export function Settings() {
                       <h4 className="text-[18px] font-extrabold text-slate-800 dark:text-slate-100">{user.name}</h4>
                       <p className="text-[13px] font-medium text-slate-500 dark:text-slate-400">{user.email}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="px-2 py-0.5 rounded-[6px] text-[9px] font-extrabold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-400">Enterprise</span>
+                        <span className="px-2 py-0.5 rounded-[6px] text-[9px] font-extrabold bg-indigo-50 text-indigo-600 border border-indigo-100 uppercase tracking-widest dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-400">Personal</span>
                         <button onClick={handleCopyAccount} className="text-[11px] font-bold text-slate-400 hover:text-indigo-600 transition-colors flex items-center gap-1">
                           {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
                           {accountNumber}
@@ -616,50 +628,19 @@ export function Settings() {
                 <div className="bg-white border border-slate-200/80 rounded-[24px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] overflow-hidden dark:bg-slate-900 dark:border-slate-700/50">
                   <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-slate-700/50">
                     <h3 className="text-[16px] font-bold text-slate-800 tracking-tight dark:text-slate-100">Security & Access</h3>
-                    <span className="rounded-[8px] bg-indigo-50 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">Real-time monitoring</span>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:bg-slate-800 dark:text-slate-400">
-                        <tr>
-                          <th className="px-5 py-3">Device</th>
-                          <th className="px-5 py-3">Location</th>
-                          <th className="px-5 py-3">IP Address</th>
-                          <th className="px-5 py-3">Last Activity</th>
-                          <th className="px-5 py-3">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50">
-                        {sessions.map((session) => {
-                          const Icon = session.icon;
-                          return (
-                            <tr key={session.id} className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                              <td className="px-5 py-3">
-                                <div className="flex items-center gap-2">
-                                  <Icon className={cn('w-4 h-4', session.current ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400')} />
-                                  <span className="text-[13px] font-medium text-slate-800 dark:text-slate-100">{session.device}</span>
-                                </div>
-                              </td>
-                              <td className="px-5 py-3 text-[13px] text-slate-600 dark:text-slate-400">{session.location}</td>
-                              <td className="px-5 py-3 font-mono text-[13px] text-slate-600 dark:text-slate-400">{session.ip}</td>
-                              <td className="px-5 py-3">
-                                {session.current ? (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                                    Current Session
-                                  </span>
-                                ) : (
-                                  <span className="text-[13px] text-slate-500 dark:text-slate-400">2 hours ago</span>
-                                )}
-                              </td>
-                              <td className="px-5 py-3">
-                                <button className="text-[13px] font-medium text-rose-500 hover:underline">Revoke</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="p-5">
+                    <div className="flex items-center gap-3">
+                      <currentSession.icon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                      <div className="flex flex-col">
+                        <span className="text-[14px] font-bold text-slate-800 dark:text-slate-100">{currentSession.device}</span>
+                        <span className="text-[12px] text-slate-500 dark:text-slate-400">{currentSession.location}</span>
+                      </div>
+                      <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Active Now
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
