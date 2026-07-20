@@ -47,7 +47,7 @@ export function Header({ onMenuClick }: HeaderProps) {
       <div className="flex flex-1 items-center gap-3">
         {/* Phonicity logo + name */}
         <div className="flex items-center gap-3 lg:hidden">
-          <img src="/phonicity2.png" alt="Phonicity" className="h-14 w-14 min-h-[56px] min-w-[56px] object-contain rounded-md" />
+          <img src="/phonicity2.png" alt="Phonicity" className="h-12 w-12 min-h-[48px] min-w-[48px] object-contain rounded-md" />
           <h1 className="text-lg font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Phonicity</h1>
         </div>
 
