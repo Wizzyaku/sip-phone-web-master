@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Mail, Phone, MapPin, MessageSquare, Globe,
-  ArrowRight, CheckCircle, Clock
+  ArrowRight, CheckCircle, Clock, Menu, X
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { useAuthModal } from '../store/authModalStore';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -17,6 +19,7 @@ export function Contact() {
     message: '',
   });
   const openAuth = useAuthModal((s) => s.open);
+  const isDesktop = useIsDesktop();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,65 +36,88 @@ export function Contact() {
               <img src="/phonicity2.png" alt="Phonicity" className="h-9 w-9 object-contain rounded-md" />
               <span className="text-xl font-bold text-primary tracking-tight">Phonicity</span>
             </Link>
-            <div className="hidden md:flex items-center gap-3">
-              <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
-              <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
+            {isDesktop && (
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
+                <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
+                  Get Started Free
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {!isDesktop && (
+              <button
+                className="p-2 rounded-lg hover:bg-muted"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Mobile Nav */}
+        {!isDesktop && mobileMenuOpen && (
+          <div className="border-t border-border bg-background">
+            <div className="px-4 py-4 space-y-3">
+              <Link to="/" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+              <div className="pt-3 flex flex-col gap-2">
+                <Button variant="outline" className="w-full font-semibold" onClick={() => { openAuth('login'); setMobileMenuOpen(false); }}>Sign in</Button>
+                <Button className="w-full font-semibold" onClick={() => { openAuth('signup'); setMobileMenuOpen(false); }}>Get Started Free</Button>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Contact Section */}
-      <section className="bg-auth-mesh py-20 md:py-28">
+      <section className={`bg-auth-mesh ${isDesktop ? 'py-28' : 'py-10'}`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className={`text-center max-w-2xl mx-auto ${isDesktop ? 'mb-16' : 'mb-8'}`}>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest mb-4">
               <MessageSquare className="h-3.5 w-3.5" />
               Get in Touch
             </div>
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground">
+            <h1 className={`${isDesktop ? 'text-5xl' : 'text-3xl'} font-bold text-foreground`}>
               Let's talk about your <span className="text-primary">communication needs</span>
             </h1>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className={`mt-3 ${isDesktop ? 'text-lg' : 'text-sm'} text-muted-foreground`}>
               Have questions about Phonicity? Want to set up virtual numbers for your team? Reach out, and let's find the perfect communication solution for your business.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className={`grid ${isDesktop ? 'grid-cols-1 lg:grid-cols-3 gap-8' : 'grid-cols-1 gap-3'}`}>
             {/* Contact Info Cards */}
-            <div className="space-y-4">
-              <div className="glass-card rounded-2xl p-6">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                  <Mail className="h-6 w-6 text-primary" />
+            <div className={isDesktop ? 'space-y-4' : 'space-y-3'}>
+              <div className={`glass-card rounded-2xl ${isDesktop ? 'p-6' : 'p-4'}`}>
+                <div className={`${isDesktop ? 'h-12 w-12' : 'h-10 w-10'} rounded-xl bg-primary/10 flex items-center justify-center mb-3`}>
+                  <Mail className={`${isDesktop ? 'h-6 w-6' : 'h-5 w-5'} text-primary`} />
                 </div>
-                <h3 className="font-semibold text-foreground">Email Us</h3>
-                <p className="mt-1 text-sm text-muted-foreground">We'll respond within 24 hours.</p>
-                <a href="mailto:support@phonicity.com" className="mt-2 block text-sm font-semibold text-primary hover:underline">
+                <h3 className={`${isDesktop ? '' : 'text-sm'} font-semibold text-foreground`}>Email Us</h3>
+                <p className={`mt-1 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground`}>We'll respond within 24 hours.</p>
+                <a href="mailto:support@phonicity.com" className={`mt-2 block ${isDesktop ? 'text-sm' : 'text-xs'} font-semibold text-primary hover:underline`}>
                   support@phonicity.com
                 </a>
               </div>
 
-              <div className="glass-card rounded-2xl p-6">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                  <Phone className="h-6 w-6 text-primary" />
+              <div className={`glass-card rounded-2xl ${isDesktop ? 'p-6' : 'p-4'}`}>
+                <div className={`${isDesktop ? 'h-12 w-12' : 'h-10 w-10'} rounded-xl bg-primary/10 flex items-center justify-center mb-3`}>
+                  <Phone className={`${isDesktop ? 'h-6 w-6' : 'h-5 w-5'} text-primary`} />
                 </div>
-                <h3 className="font-semibold text-foreground">Call Us</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Mon-Fri, 9am-6pm EST.</p>
-                <a href="tel:+18005551234" className="mt-2 block text-sm font-semibold text-primary hover:underline">
+                <h3 className={`${isDesktop ? '' : 'text-sm'} font-semibold text-foreground`}>Call Us</h3>
+                <p className={`mt-1 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground`}>Mon-Fri, 9am-6pm EST.</p>
+                <a href="tel:+18005551234" className={`mt-2 block ${isDesktop ? 'text-sm' : 'text-xs'} font-semibold text-primary hover:underline`}>
                   +1 (800) 555-1234
                 </a>
               </div>
 
-              <div className="glass-card rounded-2xl p-6">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                  <MapPin className="h-6 w-6 text-primary" />
+              <div className={`glass-card rounded-2xl ${isDesktop ? 'p-6' : 'p-4'}`}>
+                <div className={`${isDesktop ? 'h-12 w-12' : 'h-10 w-10'} rounded-xl bg-primary/10 flex items-center justify-center mb-3`}>
+                  <MapPin className={`${isDesktop ? 'h-6 w-6' : 'h-5 w-5'} text-primary`} />
                 </div>
-                <h3 className="font-semibold text-foreground">Visit Us</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Our headquarters.</p>
-                <p className="mt-2 text-sm font-semibold text-foreground">
+                <h3 className={`${isDesktop ? '' : 'text-sm'} font-semibold text-foreground`}>Visit Us</h3>
+                <p className={`mt-1 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground`}>Our headquarters.</p>
+                <p className={`mt-2 ${isDesktop ? 'text-sm' : 'text-xs'} font-semibold text-foreground`}>
                   123 Cloud Avenue<br />
                   San Francisco, CA 94107
                 </p>
@@ -100,7 +126,7 @@ export function Contact() {
 
             {/* Contact Form */}
             <div className="lg:col-span-2">
-              <div className="glass-panel rounded-2xl p-8">
+              <div className={`glass-panel rounded-2xl ${isDesktop ? 'p-8' : 'p-4'}`}>
                 {submitted ? (
                   <div className="text-center py-12">
                     <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
@@ -122,11 +148,11 @@ export function Contact() {
                   </div>
                 ) : (
                   <>
-                    <h2 className="text-2xl font-bold text-foreground mb-2">Send us a message</h2>
-                    <p className="text-muted-foreground text-sm mb-6">Fill out the form below and we'll get back to you shortly.</p>
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="space-y-2">
+                    <h2 className={`${isDesktop ? 'text-2xl' : 'text-lg'} font-bold text-foreground mb-2`}>Send us a message</h2>
+                    <p className={`text-muted-foreground ${isDesktop ? 'text-sm' : 'text-xs'} mb-4`}>Fill out the form below and we'll get back to you shortly.</p>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className={`grid ${isDesktop ? 'grid-cols-1 md:grid-cols-2 gap-5' : 'grid-cols-1 gap-3'}`}>
+                        <div className="space-y-1.5">
                           <label className="text-sm font-medium text-muted-foreground" htmlFor="name">
                             Full Name
                           </label>
@@ -140,7 +166,7 @@ export function Contact() {
                             required
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           <label className="text-sm font-medium text-muted-foreground" htmlFor="email">
                             Email Address
                           </label>
@@ -155,7 +181,7 @@ export function Contact() {
                           />
                         </div>
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <label className="text-sm font-medium text-muted-foreground" htmlFor="company">
                           Company (optional)
                         </label>
@@ -168,13 +194,13 @@ export function Contact() {
                           className="h-11 rounded-xl"
                         />
                       </div>
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         <label className="text-sm font-medium text-muted-foreground" htmlFor="message">
                           Message
                         </label>
                         <textarea
                           id="message"
-                          rows={5}
+                          rows={isDesktop ? 5 : 4}
                           placeholder="Tell us about your communication needs..."
                           value={form.message}
                           onChange={(e) => setForm({ ...form, message: e.target.value })}
@@ -198,7 +224,7 @@ export function Contact() {
           </div>
 
           {/* Bottom info bar */}
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className={`grid ${isDesktop ? 'grid-cols-1 md:grid-cols-3 gap-6 mt-16' : 'grid-cols-1 gap-3 mt-8'}`}>
             <div className="flex items-center gap-3 p-4 rounded-xl bg-card border border-border">
               <Clock className="h-5 w-5 text-primary shrink-0" />
               <div>
@@ -225,7 +251,7 @@ export function Contact() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-8">
+      <footer className={`border-t border-border ${isDesktop ? 'py-8' : 'py-6'}`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <Link to="/" className="flex items-center gap-2">
             <img src="/phonicity2.png" alt="Phonicity" className="h-8 w-8 object-contain rounded-md" />

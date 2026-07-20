@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuthModal } from '../store/authModalStore';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 const features = [
   {
@@ -114,6 +115,7 @@ export function Home() {
   const [activeTab, setActiveTab] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const openAuth = useAuthModal((s) => s.open);
+  const isDesktop = useIsDesktop();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -127,34 +129,40 @@ export function Home() {
             </div>
 
             {/* Desktop Nav */}
-            <nav className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Features</a>
-              <a href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
-              <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
-              <Link to="/contact" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
-            </nav>
+            {isDesktop && (
+              <nav className="flex items-center gap-8">
+                <a href="#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Features</a>
+                <a href="#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+                <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
+                <Link to="/contact" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Contact</Link>
+              </nav>
+            )}
 
-            <div className="hidden md:flex items-center gap-3">
-              <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
-              <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
+            {isDesktop && (
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
+                <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
+                  Get Started Free
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
 
             {/* Mobile menu button */}
-            <button
-              className="md:hidden p-2 rounded-lg hover:bg-muted"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            >
-              {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
+            {!isDesktop && (
+              <button
+                className="p-2 rounded-lg hover:bg-muted"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+            )}
           </div>
         </div>
 
         {/* Mobile Nav */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-border bg-background">
+        {!isDesktop && mobileMenuOpen && (
+          <div className="border-t border-border bg-background">
             <div className="px-4 py-4 space-y-3">
               <a href="#features" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Features</a>
               <a href="#pricing" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
@@ -171,21 +179,21 @@ export function Home() {
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-auth-mesh">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 md:py-28">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6 animate-fade-in">
+        <div className={`mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 ${isDesktop ? 'py-28' : 'py-10'}`}>
+          <div className={`grid ${isDesktop ? 'grid-cols-1 lg:grid-cols-2 gap-12' : 'grid-cols-1 gap-6'} items-center`}>
+            <div className={`animate-fade-in ${isDesktop ? 'space-y-6' : 'space-y-4'}`}>
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest">
                 <CheckCircle className="h-3.5 w-3.5" />
                 Cloud Telephony Platform
               </div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight">
+              <h1 className={`${isDesktop ? 'text-5xl lg:text-6xl' : 'text-3xl'} font-bold text-foreground leading-tight`}>
                 Connect Your Team with{' '}
                 <span className="text-primary">Phonicity</span>
               </h1>
-              <p className="text-lg text-muted-foreground max-w-xl">
+              <p className={`${isDesktop ? 'text-lg' : 'text-sm'} text-muted-foreground max-w-xl`}>
                 Virtual phone numbers, VoIP calling, and SMS messaging — all from one intuitive dashboard. No hardware, no contracts, just instant communication.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 pt-2">
+              <div className={`flex flex-col sm:flex-row gap-3 ${isDesktop ? 'pt-2' : 'pt-1'}`}>
                 <Button size="lg" className="font-semibold text-base shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
                   Get Started Free
                   <ArrowRight className="ml-2 h-5 w-5" />
@@ -197,7 +205,7 @@ export function Home() {
                 </a>
               </div>
               {/* Reviews */}
-              <div className="flex items-center gap-4 pt-4">
+              <div className={`flex items-center gap-3 ${isDesktop ? 'pt-4' : 'pt-2'}`}>
                 <div className="flex -space-x-3">
                   {[
                     'https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=80&h=80&fit=facearea&facepad=2&q=80',
@@ -222,97 +230,99 @@ export function Home() {
               </div>
             </div>
 
-            {/* Hero Visual */}
-            <div className="relative animate-fade-in animate-delay-200">
-              <div className="glass-panel rounded-2xl p-6 shadow-2xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-3 w-3 rounded-full bg-red-400" />
-                    <div className="h-3 w-3 rounded-full bg-yellow-400" />
-                    <div className="h-3 w-3 rounded-full bg-green-400" />
+            {/* Hero Visual - hidden on mobile */}
+            {isDesktop && (
+              <div className="relative animate-fade-in animate-delay-200">
+                <div className="glass-panel rounded-2xl p-6 shadow-2xl">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-3 w-3 rounded-full bg-red-400" />
+                      <div className="h-3 w-3 rounded-full bg-yellow-400" />
+                      <div className="h-3 w-3 rounded-full bg-green-400" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">phonicity.com/dashboard</span>
                   </div>
-                  <span className="text-xs text-muted-foreground font-medium">phonicity.com/dashboard</span>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Phone className="h-5 w-5 text-primary" />
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Phone className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold">+1 (555) 123-4567</p>
+                          <p className="text-xs text-muted-foreground">Incoming call · 2:34</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold">+1 (555) 123-4567</p>
-                        <p className="text-xs text-muted-foreground">Incoming call · 2:34</p>
+                      <span className="text-xs font-semibold text-green-600">Active</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <MessageSquare className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold">SMS Campaign</p>
+                          <p className="text-xs text-muted-foreground">1,284 messages sent</p>
+                        </div>
                       </div>
+                      <span className="text-xs font-semibold text-blue-600">Delivered</span>
                     </div>
-                    <span className="text-xs font-semibold text-green-600">Active</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <MessageSquare className="h-5 w-5 text-primary" />
+                    <div className="grid grid-cols-3 gap-3 pt-2">
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-2xl font-bold text-primary">247</p>
+                        <p className="text-xs text-muted-foreground">Calls today</p>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold">SMS Campaign</p>
-                        <p className="text-xs text-muted-foreground">1,284 messages sent</p>
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-2xl font-bold text-primary">89%</p>
+                        <p className="text-xs text-muted-foreground">Answer rate</p>
                       </div>
-                    </div>
-                    <span className="text-xs font-semibold text-blue-600">Delivered</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 pt-2">
-                    <div className="p-3 rounded-xl bg-muted/50 text-center">
-                      <p className="text-2xl font-bold text-primary">247</p>
-                      <p className="text-xs text-muted-foreground">Calls today</p>
-                    </div>
-                    <div className="p-3 rounded-xl bg-muted/50 text-center">
-                      <p className="text-2xl font-bold text-primary">89%</p>
-                      <p className="text-xs text-muted-foreground">Answer rate</p>
-                    </div>
-                    <div className="p-3 rounded-xl bg-muted/50 text-center">
-                      <p className="text-2xl font-bold text-primary">3</p>
-                      <p className="text-xs text-muted-foreground">Active numbers</p>
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-2xl font-bold text-primary">3</p>
+                        <p className="text-xs text-muted-foreground">Active numbers</p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </section>
 
       {/* Trusted By */}
-      <section className="border-y border-border/50 py-12">
+      <section className={`border-y border-border/50 ${isDesktop ? 'py-12' : 'py-6'}`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest mb-6">
+          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest mb-4">
             Trusted by Modern Teams
           </p>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
+          <p className={`text-muted-foreground max-w-2xl mx-auto ${isDesktop ? '' : 'text-xs'}`}>
             Experience the reliability chosen by startups, agencies, and enterprises worldwide.
           </p>
         </div>
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 md:py-28">
+      <section id="features" className={isDesktop ? 'py-28' : 'py-10'}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+          <div className={`text-center max-w-2xl mx-auto ${isDesktop ? 'mb-16' : 'mb-8'}`}>
+            <h2 className={`${isDesktop ? 'text-4xl' : 'text-2xl'} font-bold text-foreground`}>
               Built for Modern Communication
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className={`mt-3 ${isDesktop ? 'text-lg' : 'text-sm'} text-muted-foreground`}>
               At Phonicity, we solve the communication challenges faced by modern teams. From instant number provisioning to crystal-clear VoIP calls, we're dedicated to helping you stay connected and productive.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className={`grid ${isDesktop ? 'grid-cols-1 md:grid-cols-2 gap-6' : 'grid-cols-1 gap-3'}`}>
             {features.map((feature) => (
-              <div key={feature.heading} className="glass-card rounded-2xl p-6">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <feature.icon className="h-6 w-6 text-primary" />
+              <div key={feature.heading} className={`glass-card rounded-2xl ${isDesktop ? 'p-6' : 'p-4'}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`${isDesktop ? 'h-12 w-12' : 'h-10 w-10'} rounded-xl bg-primary/10 flex items-center justify-center shrink-0`}>
+                    <feature.icon className={`${isDesktop ? 'h-6 w-6' : 'h-5 w-5'} text-primary`} />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">{feature.heading}</h3>
-                    <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{feature.content}</p>
+                    <h3 className={`${isDesktop ? 'text-lg' : 'text-sm font-bold'} font-semibold text-foreground`}>{feature.heading}</h3>
+                    <p className={`mt-1 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground leading-relaxed`}>{feature.content}</p>
                   </div>
                 </div>
               </div>
@@ -322,21 +332,21 @@ export function Home() {
       </section>
 
       {/* Feature Tabs Section */}
-      <section className="py-20 md:py-28 bg-muted/30">
+      <section className={`bg-muted/30 ${isDesktop ? 'py-28' : 'py-10'}`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+          <div className={`text-center max-w-2xl mx-auto ${isDesktop ? 'mb-12' : 'mb-6'}`}>
+            <h2 className={`${isDesktop ? 'text-4xl' : 'text-xl'} font-bold text-foreground`}>
               Customize <span className="text-primary">Phonicity</span>'s features to perfectly suit your team's communication needs.
             </h2>
           </div>
 
           {/* Tab buttons */}
-          <div className="flex flex-wrap justify-center gap-2 mb-12">
+          <div className={`flex ${isDesktop ? 'flex-wrap justify-center gap-2 mb-12' : 'flex-row gap-2 mb-6 overflow-x-auto no-scrollbar pb-1'}`}>
             {featureTabs.map((tab, i) => (
               <button
                 key={tab.heading}
                 onClick={() => setActiveTab(i)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition-all whitespace-nowrap ${
                   activeTab === i
                     ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                     : 'bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30'
@@ -350,17 +360,17 @@ export function Home() {
 
           {/* Tab content */}
           <div className="max-w-3xl mx-auto">
-            <div className="glass-card rounded-2xl p-8 md:p-12">
-              <div className="flex items-start gap-4">
-                <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <div className={`glass-card rounded-2xl ${isDesktop ? 'p-12' : 'p-4'}`}>
+              <div className="flex items-start gap-3">
+                <div className={`${isDesktop ? 'h-14 w-14' : 'h-10 w-10'} rounded-xl bg-primary/10 flex items-center justify-center shrink-0`}>
                   {(() => {
                     const Icon = featureTabs[activeTab].icon;
-                    return <Icon className="h-7 w-7 text-primary" />;
+                    return <Icon className={`${isDesktop ? 'h-7 w-7' : 'h-5 w-5'} text-primary`} />;
                   })()}
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-foreground">{featureTabs[activeTab].heading}</h3>
-                  <p className="mt-3 text-muted-foreground leading-relaxed">{featureTabs[activeTab].content}</p>
+                  <h3 className={`${isDesktop ? 'text-xl' : 'text-sm font-bold'} font-bold text-foreground`}>{featureTabs[activeTab].heading}</h3>
+                  <p className={`mt-2 ${isDesktop ? 'text-muted-foreground' : 'text-xs text-muted-foreground'} leading-relaxed`}>{featureTabs[activeTab].content}</p>
                 </div>
               </div>
             </div>
@@ -369,25 +379,25 @@ export function Home() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 md:py-28">
+      <section className={isDesktop ? 'py-28' : 'py-10'}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+          <div className={`text-center max-w-2xl mx-auto ${isDesktop ? 'mb-12' : 'mb-6'}`}>
+            <h2 className={`${isDesktop ? 'text-4xl' : 'text-2xl'} font-bold text-foreground`}>
               Fast-Track Your Communications
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className={`mt-3 ${isDesktop ? 'text-lg' : 'text-sm'} text-muted-foreground`}>
               At Phonicity, we ensure a swift start with instant account setup. Experience the speed of modern cloud telephony redefined.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className={`grid grid-cols-2 ${isDesktop ? 'md:grid-cols-4 gap-6' : 'gap-4'}`}>
             {stats.map((stat) => (
               <div key={stat.count} className="text-center">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <stat.icon className="h-6 w-6 text-primary" />
+                <div className={`${isDesktop ? 'h-12 w-12' : 'h-10 w-10'} rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3`}>
+                  <stat.icon className={`${isDesktop ? 'h-6 w-6' : 'h-5 w-5'} text-primary`} />
                 </div>
-                <p className="text-3xl md:text-4xl font-bold text-primary">{stat.count}</p>
-                <p className="mt-2 text-sm text-muted-foreground max-w-[200px] mx-auto">{stat.description}</p>
+                <p className={`${isDesktop ? 'text-4xl' : 'text-2xl'} font-bold text-primary`}>{stat.count}</p>
+                <p className={`mt-1 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground max-w-[200px] mx-auto`}>{stat.description}</p>
               </div>
             ))}
           </div>
@@ -395,22 +405,22 @@ export function Home() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 md:py-28 bg-muted/30">
+      <section id="pricing" className={`bg-muted/30 ${isDesktop ? 'py-28' : 'py-10'}`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+          <div className={`text-center max-w-2xl mx-auto ${isDesktop ? 'mb-16' : 'mb-8'}`}>
+            <h2 className={`${isDesktop ? 'text-4xl' : 'text-2xl'} font-bold text-foreground`}>
               Simple, Transparent Pricing
             </h2>
-            <p className="mt-4 text-lg text-muted-foreground">
+            <p className={`mt-3 ${isDesktop ? 'text-lg' : 'text-sm'} text-muted-foreground`}>
               Choose the plan that fits your team. Scale up anytime as you grow.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className={`grid ${isDesktop ? 'grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl' : 'grid-cols-1 gap-4'} mx-auto`}>
             {pricingPlans.map((plan) => (
               <div
                 key={plan.name}
-                className={`relative rounded-2xl p-8 ${
+                className={`relative rounded-2xl ${isDesktop ? 'p-8' : 'p-5'} ${
                   plan.highlighted
                     ? 'bg-card border-2 border-primary shadow-xl shadow-primary/10'
                     : 'bg-card border border-border'
@@ -421,22 +431,22 @@ export function Home() {
                     Best value
                   </span>
                 )}
-                <h3 className="text-xl font-bold text-foreground">{plan.name}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
-                <div className="mt-6 flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-foreground">${plan.price}</span>
-                  <span className="text-lg text-muted-foreground">.00</span>
+                <h3 className={`${isDesktop ? 'text-xl' : 'text-base'} font-bold text-foreground`}>{plan.name}</h3>
+                <p className={`mt-1 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground`}>{plan.description}</p>
+                <div className={`mt-4 flex items-baseline gap-1`}>
+                  <span className={`${isDesktop ? 'text-4xl' : 'text-3xl'} font-bold text-foreground`}>${plan.price}</span>
+                  <span className={`${isDesktop ? 'text-lg' : 'text-sm'} text-muted-foreground`}>.00</span>
                   <span className="text-sm text-muted-foreground ml-2">USD / monthly</span>
                 </div>
-                <ul className="mt-6 space-y-3">
+                <ul className={`mt-4 space-y-2`}>
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3 text-sm">
-                      <CheckCircle className="h-5 w-5 text-primary shrink-0" />
+                    <li key={feature} className="flex items-center gap-2 text-sm">
+                      <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                       <span className="text-foreground">{feature}</span>
                     </li>
                   ))}
                 </ul>
-                <div className="block mt-8">
+                <div className="block mt-5">
                   <Button
                     className="w-full font-semibold"
                     variant={plan.highlighted ? 'default' : 'outline'}
@@ -449,7 +459,7 @@ export function Home() {
             ))}
           </div>
 
-          <p className="text-center mt-8 text-muted-foreground">
+          <p className={`text-center mt-6 text-muted-foreground ${isDesktop ? '' : 'text-sm'}`}>
             Need custom enterprise solutions?{' '}
             <Link to="/contact" className="text-primary font-semibold hover:underline">
               Contact Sales
@@ -459,25 +469,25 @@ export function Home() {
       </section>
 
       {/* FAQ Section */}
-      <section id="faq" className="py-20 md:py-28">
+      <section id="faq" className={isDesktop ? 'py-28' : 'py-10'}>
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+          <div className={`text-center ${isDesktop ? 'mb-12' : 'mb-6'}`}>
+            <h2 className={`${isDesktop ? 'text-4xl' : 'text-2xl'} font-bold text-foreground`}>
               Frequently asked questions
             </h2>
-            <p className="mt-4 text-muted-foreground">
+            <p className={`mt-3 ${isDesktop ? '' : 'text-sm'} text-muted-foreground`}>
               Ask us anything about Phonicity and our phone services, and get factual responses.
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {faqs.map((faq, i) => (
               <div key={i} className="rounded-xl border border-border bg-card overflow-hidden">
                 <button
                   onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between p-5 text-left"
+                  className={`w-full flex items-center justify-between ${isDesktop ? 'p-5' : 'p-3.5'} text-left`}
                 >
-                  <span className="font-semibold text-foreground">{faq.question}</span>
+                  <span className={`${isDesktop ? 'font-semibold' : 'text-sm font-bold'} text-foreground`}>{faq.question}</span>
                   <ChevronDown
                     className={`h-5 w-5 text-muted-foreground shrink-0 transition-transform ${
                       openFaq === i ? 'rotate-180' : ''
@@ -485,7 +495,7 @@ export function Home() {
                   />
                 </button>
                 {openFaq === i && (
-                  <div className="px-5 pb-5 text-sm text-muted-foreground leading-relaxed">
+                  <div className={`px-5 pb-5 ${isDesktop ? 'text-sm' : 'text-xs'} text-muted-foreground leading-relaxed`}>
                     {faq.answer}
                   </div>
                 )}
@@ -496,15 +506,15 @@ export function Home() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 md:py-28 bg-primary text-primary-foreground">
+      <section className={`bg-primary text-primary-foreground ${isDesktop ? 'py-28' : 'py-10'}`}>
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold">
+          <h2 className={`${isDesktop ? 'text-4xl' : 'text-2xl'} font-bold`}>
             Let's Connect Together
           </h2>
-          <p className="mt-4 text-lg text-primary-foreground/80 max-w-2xl mx-auto">
+          <p className={`mt-3 ${isDesktop ? 'text-lg' : 'text-sm'} text-primary-foreground/80 max-w-2xl mx-auto`}>
             Phonicity is a cloud phone platform built for modern teams — designed to keep your team connected anywhere. Get started today with a free account.
           </p>
-          <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+          <div className={`mt-6 flex flex-col sm:flex-row gap-3 justify-center`}>
             <Button size="lg" variant="secondary" className="font-semibold text-base" onClick={() => openAuth('signup')}>
               Get Started Free
               <ArrowRight className="ml-2 h-5 w-5" />
@@ -519,43 +529,70 @@ export function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-12">
+      <footer className={`border-t border-border ${isDesktop ? 'py-12' : 'py-8'}`}>
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <img src="/phonicity2.png" alt="Phonicity" className="h-9 w-9 object-contain rounded-md" />
-                <span className="text-lg font-bold text-primary">Phonicity</span>
+          {isDesktop ? (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              <div className="col-span-2 md:col-span-1">
+                <div className="flex items-center gap-2 mb-4">
+                  <img src="/phonicity2.png" alt="Phonicity" className="h-9 w-9 object-contain rounded-md" />
+                  <span className="text-lg font-bold text-primary">Phonicity</span>
+                </div>
+                <p className="text-sm text-muted-foreground max-w-xs">
+                  Cloud telephony platform for modern teams. Virtual numbers, VoIP calling, and SMS messaging.
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground max-w-xs">
-                Cloud telephony platform for modern teams. Virtual numbers, VoIP calling, and SMS messaging.
-              </p>
+              <div>
+                <h4 className="font-semibold text-foreground mb-3 text-sm">Product</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><a href="#features" className="hover:text-primary">Features</a></li>
+                  <li><a href="#pricing" className="hover:text-primary">Pricing</a></li>
+                  <li><a href="#faq" className="hover:text-primary">FAQ</a></li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-foreground mb-3 text-sm">Company</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><Link to="/contact" className="hover:text-primary">Contact</Link></li>
+                  <li><a href="#" className="hover:text-primary">About</a></li>
+                  <li><a href="#" className="hover:text-primary">Blog</a></li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold text-foreground mb-3 text-sm">Get Started</h4>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li><button onClick={() => openAuth('login')} className="hover:text-primary text-left">Sign in</button></li>
+                  <li><button onClick={() => openAuth('signup')} className="hover:text-primary text-left">Create account</button></li>
+                </ul>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-3 text-sm">Product</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><a href="#features" className="hover:text-primary">Features</a></li>
-                <li><a href="#pricing" className="hover:text-primary">Pricing</a></li>
-                <li><a href="#faq" className="hover:text-primary">FAQ</a></li>
-              </ul>
+          ) : (
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center gap-2">
+                <img src="/phonicity2.png" alt="Phonicity" className="h-8 w-8 object-contain rounded-md" />
+                <span className="text-base font-bold text-primary">Phonicity</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-bold text-foreground mb-2 text-xs uppercase tracking-wider">Product</h4>
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    <li><a href="#features" className="hover:text-primary">Features</a></li>
+                    <li><a href="#pricing" className="hover:text-primary">Pricing</a></li>
+                    <li><a href="#faq" className="hover:text-primary">FAQ</a></li>
+                  </ul>
+                </div>
+                <div>
+                  <h4 className="font-bold text-foreground mb-2 text-xs uppercase tracking-wider">Company</h4>
+                  <ul className="space-y-1.5 text-xs text-muted-foreground">
+                    <li><Link to="/contact" className="hover:text-primary">Contact</Link></li>
+                    <li><button onClick={() => openAuth('login')} className="hover:text-primary text-left">Sign in</button></li>
+                    <li><button onClick={() => openAuth('signup')} className="hover:text-primary text-left">Create account</button></li>
+                  </ul>
+                </div>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-3 text-sm">Company</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><Link to="/contact" className="hover:text-primary">Contact</Link></li>
-                <li><a href="#" className="hover:text-primary">About</a></li>
-                <li><a href="#" className="hover:text-primary">Blog</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-3 text-sm">Get Started</h4>
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li><button onClick={() => openAuth('login')} className="hover:text-primary text-left">Sign in</button></li>
-                <li><button onClick={() => openAuth('signup')} className="hover:text-primary text-left">Create account</button></li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-8 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4">
+          )}
+          <div className={`mt-8 pt-8 border-t border-border flex flex-col md:flex-row justify-between items-center gap-4`}>
             <p className="text-sm text-muted-foreground">© 2024 Phonicity. All rights reserved.</p>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
