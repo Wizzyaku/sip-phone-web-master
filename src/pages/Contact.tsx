@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Mail, Phone, MapPin, MessageSquare, Globe,
   ArrowRight, CheckCircle, Clock, Menu, X
@@ -20,6 +20,9 @@ export function Contact() {
   });
   const openAuth = useAuthModal((s) => s.open);
   const isDesktop = useIsDesktop();
+  const location = useLocation();
+  const isContact = location.pathname === '/contact';
+  const isHome = location.pathname === '/';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,13 +40,22 @@ export function Contact() {
               <span className="text-xl font-bold text-primary tracking-tight">Phonicity</span>
             </Link>
             {isDesktop && (
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
-                <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
-                  Get Started Free
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
+              <>
+                <nav className="flex items-center gap-8">
+                  <Link to="/" className={`text-sm font-medium transition-colors ${isHome ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'}`}>Home</Link>
+                  <a href="/#features" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Features</a>
+                  <a href="/#pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
+                  <a href="/#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
+                  <Link to="/contact" className={`text-sm font-medium transition-colors ${isContact ? 'text-primary font-semibold' : 'text-muted-foreground hover:text-foreground'}`}>Contact</Link>
+                </nav>
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
+                  <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
+                    Get Started Free
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </>
             )}
             {!isDesktop && (
               <button
@@ -60,11 +72,11 @@ export function Contact() {
         {!isDesktop && mobileMenuOpen && (
           <div className="border-t border-border bg-background">
             <div className="px-4 py-4 space-y-3">
-              <Link to="/" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Home</Link>
-              <a href="/#features" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Features</a>
-              <a href="/#pricing" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
-              <a href="/#faq" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
-              <Link to="/contact" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
+              <Link to="/" className={`block text-sm font-medium border-l-2 pl-3 py-1.5 transition-colors ${isHome ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => setMobileMenuOpen(false)}>Home</Link>
+              <a href="/#features" className="block text-sm font-medium border-l-2 border-transparent pl-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setMobileMenuOpen(false)}>Features</a>
+              <a href="/#pricing" className="block text-sm font-medium border-l-2 border-transparent pl-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+              <a href="/#faq" className="block text-sm font-medium border-l-2 border-transparent pl-3 py-1.5 text-muted-foreground hover:text-foreground transition-colors" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
+              <Link to="/contact" className={`block text-sm font-medium border-l-2 pl-3 py-1.5 transition-colors ${isContact ? 'border-primary text-primary font-semibold' : 'border-transparent text-muted-foreground hover:text-foreground'}`} onClick={() => setMobileMenuOpen(false)}>Contact</Link>
               <div className="pt-3 flex flex-col gap-2">
                 <Button variant="outline" className="w-full font-semibold" onClick={() => { openAuth('login'); setMobileMenuOpen(false); }}>Sign in</Button>
                 <Button className="w-full font-semibold" onClick={() => { openAuth('signup'); setMobileMenuOpen(false); }}>Get Started Free</Button>
