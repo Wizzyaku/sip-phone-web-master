@@ -6,8 +6,9 @@
 export const COINS_PER_USD = 1000;
 
 // --- Call pricing (per second, billed per second) ---
-export const OUTBOUND_CALL_COINS_PER_SECOND = 0.25; // 15 coins/min
-export const INBOUND_CALL_COINS_PER_SECOND = 0.1;   // 6 coins/min
+// $0.5/min = 500 coins/min = 500/60 ≈ 8.333 coins/sec
+export const OUTBOUND_CALL_COINS_PER_SECOND = 500 / 60; // $0.5/min
+export const INBOUND_CALL_COINS_PER_SECOND = 500 / 60;  // $0.5/min
 
 // --- SMS/MMS pricing (per segment) ---
 export const SMS_COINS_PER_SEGMENT = 22;   // outbound & inbound
