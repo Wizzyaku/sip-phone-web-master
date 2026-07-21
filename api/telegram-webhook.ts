@@ -190,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (error) {
       console.error('[Telegram] Failed to save code:', error);
-      res.status(500).json({ error: 'Failed to generate code.' });
+      res.status(500).json({ error: 'Failed to generate code.', details: error.message });
       return;
     }
 
