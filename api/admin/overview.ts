@@ -66,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     serverClient.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     serverClient
       .from('admin_logs')
-      .select('id, admin_name, admin_email, action, entity, entity_id, created_at')
+      .select('id, admin_name, admin_email, action, entity, entity_id, details, created_at')
       .order('created_at', { ascending: false })
       .limit(10),
   ]);
