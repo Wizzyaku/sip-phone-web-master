@@ -16,8 +16,11 @@ export const config = {
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
 
 function normalizePhone(number: string): string {
-  const digits = number.replace(/\D/g, '');
-  return digits.startsWith('1') && digits.length === 11 ? `+${digits}` : `+${digits}`;
+  let digits = number.replace(/\D/g, '');
+  if (digits.length === 10) {
+    digits = '1' + digits;
+  }
+  return '+' + digits;
 }
 
 function parseJsonBody(req: VercelRequest): Record<string, unknown> {
@@ -144,6 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    console.log('Sending to Telnyx:', { from: fromNumber, to, text: messageBody });
     const response = await fetch('https://api.telnyx.com/v2/messages', {
       method: 'POST',
       headers: {
