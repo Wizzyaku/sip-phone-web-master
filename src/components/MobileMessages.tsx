@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '../lib/utils';
 import { type Conversation, type MessageType, type MediaUpload } from '../store/appStore';
+import type { PhoneNumberRecord } from '../lib/phoneNumbers';
 
 type MobileFilterTab = 'all' | 'sms' | 'webchat';
 
@@ -28,6 +29,9 @@ interface MobileMessagesProps {
   loading: boolean;
   error: string | null;
   telnyxNumber: string | null;
+  phoneNumbers: PhoneNumberRecord[];
+  selectedFromNumber: string | null;
+  setSelectedFromNumber: (number: string | null) => void;
   to: string;
   body: string;
   sending: boolean;
@@ -447,7 +451,21 @@ export function MobileMessages(props: MobileMessagesProps) {
                 <span className="w-10 text-sm font-bold text-slate-500">From:</span>
                 <div className="flex flex-1 items-center gap-2">
                   <span className="rounded bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600">SMS</span>
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{props.telnyxNumber || '+1 (555) 012-3456'}</span>
+                  {props.phoneNumbers.length > 0 ? (
+                    <select
+                      value={props.selectedFromNumber || props.phoneNumbers[0]?.number || ''}
+                      onChange={(e) => props.setSelectedFromNumber(e.target.value)}
+                      className="flex-1 bg-transparent text-sm font-semibold text-slate-800 focus:outline-none cursor-pointer dark:text-slate-100 dark:bg-slate-900"
+                    >
+                      {props.phoneNumbers.map((num) => (
+                        <option key={num.id} value={num.number} className="text-sm">
+                          {num.label ? `${num.number} (${num.label})` : num.number}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-sm font-semibold text-slate-400">No numbers available</span>
+                  )}
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3 shadow-sm dark:bg-slate-800 dark:border-slate-700">

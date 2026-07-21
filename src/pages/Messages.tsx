@@ -27,6 +27,7 @@ import { MobileMessages } from '../components/MobileMessages';
 import { LowBalanceModal } from '../components/LowBalanceModal';
 import { hasEnoughBalance } from '../lib/balance';
 import { supabase } from '../lib/supabase';
+import { fetchUserPhoneNumbers, type PhoneNumberRecord } from '../lib/phoneNumbers';
 
 interface SmsMessage {
   sid: string;
@@ -102,6 +103,8 @@ export function Messages() {
   const telnyxNumber = useAppStore((s) => s.telnyxNumber);
 
   const [loading, setLoading] = useState(false);
+  const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumberRecord[]>([]);
+  const [selectedFromNumber, setSelectedFromNumber] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [to, setTo] = useState('');
   const [body, setBody] = useState('');
@@ -191,6 +194,16 @@ export function Messages() {
   }, [fetchMessages]);
 
   useEffect(() => {
+    fetchUserPhoneNumbers().then((nums) => {
+      setPhoneNumbers(nums);
+      if (nums.length > 0 && !selectedFromNumber) {
+        setSelectedFromNumber(nums[0].number);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConversation?.messages.length]);
 
@@ -247,7 +260,8 @@ export function Messages() {
 
   const sendTextMessage = async () => {
     if (!to.trim() || !body.trim()) return;
-    if (!telnyxNumber) {
+    const fromNumber = selectedFromNumber || telnyxNumber;
+    if (!fromNumber) {
       setError('No sender number configured. Go to Settings and verify your Telnyx number.');
       return;
     }
@@ -271,7 +285,7 @@ export function Messages() {
         {
           to: to.trim(),
           body: body.trim(),
-          from: telnyxNumber,
+          from: fromNumber,
         },
         {
           headers: {
@@ -281,8 +295,8 @@ export function Messages() {
       );
       addStoreMessage({
         id: res.data.sid || crypto.randomUUID(),
-        conversationId: getConversationId(telnyxNumber, to.trim()),
-        from: telnyxNumber,
+        conversationId: getConversationId(fromNumber, to.trim()),
+        from: fromNumber,
         to: to.trim(),
         body: body.trim(),
         type: 'text',
@@ -304,11 +318,12 @@ export function Messages() {
   };
 
   const sendMediaMessage = (type: MessageType, file: File, url: string) => {
-    if (!to.trim() || !telnyxNumber) return;
+    const fromNumber = selectedFromNumber || telnyxNumber;
+    if (!to.trim() || !fromNumber) return;
     addStoreMessage({
       id: crypto.randomUUID(),
-      conversationId: getConversationId(telnyxNumber, to.trim()),
-      from: telnyxNumber,
+      conversationId: getConversationId(fromNumber, to.trim()),
+      from: fromNumber,
       to: to.trim(),
       body: type === 'audio' ? 'Voice message' : file.name,
       type,
@@ -371,7 +386,10 @@ export function Messages() {
           activeConversation={activeConversation}
           loading={loading}
           error={error}
-          telnyxNumber={telnyxNumber}
+          telnyxNumber={selectedFromNumber || telnyxNumber}
+          phoneNumbers={phoneNumbers}
+          selectedFromNumber={selectedFromNumber}
+          setSelectedFromNumber={setSelectedFromNumber}
           to={to}
           body={body}
           sending={sending}
@@ -684,6 +702,20 @@ export function Messages() {
                     </div>
                   )}
                   <form onSubmit={handleSubmit} className="flex items-end gap-2">
+                    {phoneNumbers.length > 0 && (
+                      <select
+                        value={selectedFromNumber || phoneNumbers[0]?.number || ''}
+                        onChange={(e) => setSelectedFromNumber(e.target.value)}
+                        className="h-[42px] bg-slate-50 border border-slate-200 rounded-[12px] px-2 text-[12px] font-bold text-slate-700 focus:outline-none focus:border-indigo-500 cursor-pointer shrink-0 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
+                        title="Sending from"
+                      >
+                        {phoneNumbers.map((num) => (
+                          <option key={num.id} value={num.number}>
+                            {num.label ? `${num.number} (${num.label})` : num.number}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <input
                       ref={imageInputRef}
                       type="file"
@@ -743,7 +775,7 @@ export function Messages() {
                     </div>
                     <button
                       type="submit"
-                      disabled={sending || !to.trim() || !telnyxNumber || (mediaUploads.length === 0 && !body.trim())}
+                      disabled={sending || !to.trim() || (!selectedFromNumber && !telnyxNumber) || (mediaUploads.length === 0 && !body.trim())}
                       className="w-11 h-11 flex items-center justify-center bg-indigo-600 text-white rounded-full transition-colors shrink-0 active:scale-90 shadow-sm hover:bg-indigo-500 disabled:opacity-50"
                     >
                       <Send className="w-5 h-5" />
