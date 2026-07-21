@@ -309,6 +309,8 @@ export function Messages() {
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 402) {
         setLowBalanceOpen(true);
+      } else if (axios.isAxiosError(err) && err.response?.data?.error) {
+        setError(err.response.data.error);
       } else {
         setError('Failed to send message');
       }

@@ -28,7 +28,18 @@ function parseJsonBody(req: VercelRequest): Record<string, unknown> {
   if (typeof raw === 'string') {
     return JSON.parse(raw);
   }
-  return raw as Record<string, unknown>;
+  if (raw && typeof raw === 'object') {
+    return raw as Record<string, unknown>;
+  }
+  return {};
+}
+
+async function readRawBody(req: VercelRequest): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -49,6 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let body: Record<string, unknown>;
   try {
     body = parseJsonBody(req);
+    if (Object.keys(body).length === 0) {
+      const rawText = await readRawBody(req);
+      if (rawText) {
+        body = JSON.parse(rawText);
+      }
+    }
   } catch (parseErr) {
     console.error('Failed to parse body:', parseErr, 'req.body type:', typeof req.body, 'isBuffer:', Buffer.isBuffer(req.body));
     res.status(400).json({ error: 'Invalid JSON body' });
@@ -74,15 +91,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .eq('id', userData.user.id)
     .maybeSingle();
 
-  const to = body.to as string | undefined;
+  const rawTo = body.to as string | undefined;
   const messageBody = body.body as string | undefined;
   const rawFrom = body.from as string | undefined;
 
-  console.log('Send SMS request. to:', to, 'from:', rawFrom, 'body:', messageBody);
-  if (!to || !messageBody) {
-    res.status(400).json({ error: 'Missing "to" or "body"' });
+  console.log('Send SMS request. to:', rawTo, 'from:', rawFrom, 'body:', messageBody, 'parsedBody keys:', Object.keys(body));
+  if (!rawTo || !messageBody) {
+    res.status(400).json({ error: `Missing "to" or "body". Received to: "${rawTo}", body: "${messageBody}"` });
     return;
   }
+
+  const to = normalizePhone(rawTo);
 
   if (!rawFrom) {
     res.status(400).json({ error: 'Missing "from" number.' });
