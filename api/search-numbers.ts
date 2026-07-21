@@ -113,24 +113,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const numbers = records.map((record, idx) => {
       const phoneNumber = (record?.phone_number as string) || '';
-      const recordCountry = (record?.country_code as string) || countryCode;
+      const regionInfo = (record?.region_information as Array<Record<string, string>>) || [];
+      const recordCountry = regionInfo.find((r) => r.region_type === 'country_code')?.region_name || countryCode;
+      const costInfo = record?.cost_information as Record<string, string> | undefined;
+      const upfrontCost = costInfo?.upfront_cost ? Number(costInfo.upfront_cost) : 0;
+      const monthlyCost = costInfo?.monthly_cost ? Number(costInfo.monthly_cost) : 1.0;
+
       const features: string[] = [];
-      const recordFeatures = record?.features as string[] | undefined;
+      const recordFeatures = record?.features as Array<Record<string, string>> | undefined;
       if (recordFeatures) {
-        if (recordFeatures.includes('sms')) features.push('SMS');
-        if (recordFeatures.includes('voice')) features.push('Voice');
-        if (recordFeatures.includes('mms')) features.push('MMS');
+        const featureNames = recordFeatures.map((f) => f.name || f);
+        if (featureNames.includes('sms')) features.push('SMS');
+        if (featureNames.includes('voice')) features.push('Voice');
+        if (featureNames.includes('mms')) features.push('MMS');
       } else {
         features.push('Voice', 'SMS');
       }
-      const price = (record?.cost as number) || 1.0;
 
       return {
         id: `telnyx-${idx}`,
         number: phoneNumber,
         flag: flagForCountry(recordCountry),
         features,
-        price,
+        upfrontCost,
+        monthlyCost,
+        price: monthlyCost,
       };
     });
 

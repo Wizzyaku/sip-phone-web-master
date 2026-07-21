@@ -9,6 +9,8 @@ interface AvailableNumber {
   flag: string;
   features: string[];
   price: number;
+  upfrontCost: number;
+  monthlyCost: number;
 }
 
 const countryFilters = [
@@ -227,7 +229,10 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className="text-[13px] font-extrabold text-indigo-600">${opt.price.toFixed(2)}<span className="text-[9px] text-slate-400">/mo</span></span>
+                  <span className="text-[13px] font-extrabold text-indigo-600">${opt.monthlyCost.toFixed(2)}<span className="text-[9px] text-slate-400">/mo</span></span>
+                  {opt.upfrontCost > 0 && (
+                    <span className="text-[9px] font-bold text-slate-400">+${opt.upfrontCost.toFixed(2)} upfront</span>
+                  )}
                   <div className={cn(
                     'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                     selectedNumber === opt.id ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 dark:border-slate-600'
@@ -254,7 +259,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             >
               {purchasing ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-              ) : selectedNumber ? `Pay $${selectedPrice?.toFixed(2)}/mo` : 'Select a Number'}
+              ) : selectedNumber ? `Purchase · $${selectedPrice?.toFixed(2)}/mo` : 'Select a Number'}
             </button>
           </div>
         </div>
@@ -339,7 +344,10 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5">
-                  <span className="text-sm font-extrabold text-indigo-600">${opt.price.toFixed(2)}<span className="text-[10px] text-slate-400">/mo</span></span>
+                  <span className="text-sm font-extrabold text-indigo-600">${opt.monthlyCost.toFixed(2)}<span className="text-[10px] text-slate-400">/mo</span></span>
+                  {opt.upfrontCost > 0 && (
+                    <span className="text-[10px] font-bold text-slate-400">+${opt.upfrontCost.toFixed(2)} upfront</span>
+                  )}
                   <div className={cn(
                     'w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors',
                     selectedNumber === opt.id ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 dark:border-slate-600'
@@ -366,7 +374,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             >
               {purchasing ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-              ) : selectedNumber ? `Pay $${selectedPrice?.toFixed(2)}/mo` : 'Select a Number'}
+              ) : selectedNumber ? `Purchase · $${selectedPrice?.toFixed(2)}/mo` : 'Select a Number'}
             </button>
           </div>
         </div>
