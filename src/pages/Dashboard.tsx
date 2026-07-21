@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { useSipContext } from '../context/SipContext';
 import { formatTokens } from '../lib/balance';
 import { cn } from '../lib/utils';
 import { BuyNumberModal } from '../components/BuyNumberModal';
@@ -56,7 +57,9 @@ export function Dashboard() {
   const balance = useAppStore((s) => s.balance);
   const balanceLoading = useAppStore((s) => s.balanceLoading);
   const navigate = useNavigate();
+  const { call } = useSipContext();
   const [topUpOpen, setTopUpOpen] = useState(false);
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
   const [buyNumberOpen, setBuyNumberOpen] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState(50);
   const [paying, setPaying] = useState(false);
@@ -130,6 +133,26 @@ export function Dashboard() {
       setPaying(false);
       setTopUpOpen(false);
     }, 1500);
+  };
+
+  const isCallType = (type: string) => type === 'incoming' || type === 'outgoing' || type === 'missed';
+
+  const handleActivityClick = (item: { id: string; type: string; title: string }) => {
+    if (isCallType(item.type)) {
+      setExpandedActivityId(expandedActivityId === item.id ? null : item.id);
+    } else if (item.type === 'message') {
+      navigate('/messages');
+    }
+  };
+
+  const handleActivityCall = (phone: string) => {
+    call(phone);
+    setExpandedActivityId(null);
+  };
+
+  const handleActivityMessage = (phone: string) => {
+    navigate(`/messages?to=${encodeURIComponent(phone)}`);
+    setExpandedActivityId(null);
   };
 
   return (
@@ -270,25 +293,44 @@ export function Dashboard() {
               if (item.type === 'topup') { Icon = Wallet; bgClass = 'bg-emerald-50 text-emerald-600'; }
 
               return (
-                <div
-                  key={item.id}
-                  className="p-2 flex items-center justify-between active:bg-slate-50 rounded-[14px] transition-colors cursor-pointer dark:hover:bg-slate-800"
-                  onClick={() => navigate('/messages')}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', bgClass)}>
-                      <Icon className="w-4 h-4" />
+                <div key={item.id} className="rounded-[14px] overflow-hidden">
+                  <div
+                    className="p-2 flex items-center justify-between active:bg-slate-50 rounded-[14px] transition-colors cursor-pointer dark:hover:bg-slate-800"
+                    onClick={() => handleActivityClick(item)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0', bgClass)}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[12px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
+                          {item.title}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium truncate max-w-[180px]">
+                          {item.description}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex flex-col">
-                      <span className="text-[12px] font-bold text-slate-800 dark:text-slate-100 leading-tight">
-                        {item.title}
-                      </span>
-                      <span className="text-[10px] text-slate-500 font-medium truncate max-w-[180px]">
-                        {item.description}
-                      </span>
-                    </div>
+                    <span className="text-[9px] font-extrabold text-slate-400">{item.time}</span>
                   </div>
-                  <span className="text-[9px] font-extrabold text-slate-400">{item.time}</span>
+                  {expandedActivityId === item.id && isCallType(item.type) && (
+                    <div className="px-2 pb-2 pt-0.5 flex gap-2 animate-fade-in">
+                      <button
+                        onClick={() => handleActivityCall(item.title)}
+                        className="flex-1 h-9 rounded-[12px] bg-emerald-500 text-white font-bold text-[11px] flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Call
+                      </button>
+                      <button
+                        onClick={() => handleActivityMessage(item.title)}
+                        className="flex-1 h-9 rounded-[12px] bg-indigo-50 text-indigo-600 font-bold text-[11px] flex items-center justify-center gap-1.5 active:scale-95 transition-transform dark:bg-indigo-900/30 dark:text-indigo-400"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Message
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -456,19 +498,38 @@ export function Dashboard() {
                 if (item.type === 'topup') { Icon = Wallet; bgClass = 'bg-emerald-50 text-emerald-600'; }
 
                 return (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                    onClick={() => navigate('/messages')}
-                  >
-                    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', bgClass)}>
-                      <Icon className="w-5 h-5" />
+                  <div key={item.id} className="rounded-xl overflow-hidden">
+                    <div
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                      onClick={() => handleActivityClick(item)}
+                    >
+                      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', bgClass)}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{item.title}</p>
+                        <p className="text-xs text-slate-500 truncate">{item.description}</p>
+                      </div>
+                      <p className="text-xs text-slate-400 shrink-0 font-bold">{item.time}</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{item.title}</p>
-                      <p className="text-xs text-slate-500 truncate">{item.description}</p>
-                    </div>
-                    <p className="text-xs text-slate-400 shrink-0 font-bold">{item.time}</p>
+                    {expandedActivityId === item.id && isCallType(item.type) && (
+                      <div className="px-3 pb-3 pt-1 flex gap-2 animate-fade-in">
+                        <button
+                          onClick={() => handleActivityCall(item.title)}
+                          className="flex-1 h-9 rounded-[10px] bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-transform"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          Call
+                        </button>
+                        <button
+                          onClick={() => handleActivityMessage(item.title)}
+                          className="flex-1 h-9 rounded-[10px] bg-indigo-50 text-indigo-600 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition-transform dark:bg-indigo-900/30 dark:text-indigo-400"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          Message
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
