@@ -135,7 +135,7 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: 'admin',
+    path: '/admin',
     element: <AdminRequired />,
     errorElement: <RouteError />,
     children: [
