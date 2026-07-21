@@ -179,7 +179,7 @@ export function Settings() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       if (!token) return;
-      const res = await axios.post(`${API_URL}/generate-telegram-code`, {}, {
+      const res = await axios.post(`${API_URL}/telegram-webhook?action=generate-code`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data.link) {
