@@ -366,16 +366,6 @@ export function useSip() {
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
-            {
-              urls: 'turn:turn.telnyx.com:3478',
-              username: 'turnuser',
-              credential: 'turnpassword',
-            },
-            {
-              urls: 'turn:turn.telnyx.com:3478?transport=tcp',
-              username: 'turnuser',
-              credential: 'turnpassword',
-            },
           ],
           iceTransportPolicy: 'all',
         },

@@ -78,6 +78,13 @@ function CallModal() {
   const [showKeypad, setShowKeypad] = useState(false);
   const [dtmfInput, setDtmfInput] = useState('');
 
+  useEffect(() => {
+    if (!activeCall) {
+      setShowKeypad(false);
+      setDtmfInput('');
+    }
+  }, [activeCall]);
+
   if (!activeCall) return null;
 
   const isRingingIncoming = activeCall.direction === 'incoming' && activeCall.status === 'Ringing';
