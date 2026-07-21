@@ -43,22 +43,36 @@ export async function getTelegramUsername(): Promise<string | null> {
 export async function notifyTelegramByPhone(phoneNumber: string, text: string): Promise<void> {
   const serverClient = supabaseServer();
   const normalized = phoneNumber.replace(/\D/g, '');
+  const withPlus = '+' + normalized;
 
-  // Find the owner of this phone number
+  // Find the owner of this phone number from phone_numbers table
   const { data: phoneRow } = await serverClient
     .from('phone_numbers')
     .select('user_id')
     .eq('active', true)
-    .or(`number.eq.${normalized},number.ilike.%${normalized}%`)
+    .or(`number.eq.${withPlus},number.ilike.%${normalized}`)
     .limit(1)
     .maybeSingle();
 
-  if (!phoneRow?.user_id) return;
+  let userId: string | undefined = phoneRow?.user_id;
+
+  // Fall back to profiles.phone_number
+  if (!userId) {
+    const { data: profileRow } = await serverClient
+      .from('profiles')
+      .select('id')
+      .or(`phone_number.eq.${withPlus},phone_number.ilike.%${normalized}`)
+      .limit(1)
+      .maybeSingle();
+    userId = profileRow?.id;
+  }
+
+  if (!userId) return;
 
   const { data: profile } = await serverClient
     .from('profiles')
     .select('telegram_chat_id, telegram_enabled')
-    .eq('id', phoneRow.user_id)
+    .eq('id', userId)
     .maybeSingle();
 
   if (profile?.telegram_enabled && profile?.telegram_chat_id) {

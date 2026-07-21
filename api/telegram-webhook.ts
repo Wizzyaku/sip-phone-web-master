@@ -14,33 +14,14 @@ const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
 const TELNYX_PHONE_NUMBER = process.env.TELNYX_PHONE_NUMBER ?? '';
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';
 
-function normalizePhone(number: string): string {
-  return number.replace(/\D/g, '');
-}
-
-function parseNumberMap(): Map<string, string> {
-  const map = new Map<string, string>();
-  const raw = process.env.TELEGRAM_NUMBER_MAP;
-  if (!raw) return map;
-  const entries = raw.split(',');
-  for (const entry of entries) {
-    const [phone, chatId] = entry.split(':');
-    if (phone && chatId) {
-      map.set(normalizePhone(phone.trim()), chatId.trim());
-    }
-  }
-  return map;
-}
-
-function getPhoneForChat(chatId: string | number): string | undefined {
-  const numberMap = parseNumberMap();
-  const target = String(chatId);
-  for (const [phone, mappedChatId] of numberMap.entries()) {
-    if (mappedChatId === target) {
-      return '+' + phone;
-    }
-  }
-  return TELNYX_PHONE_NUMBER || undefined;
+async function getPhoneForChat(chatId: string | number): Promise<string | undefined> {
+  const serverClient = supabaseServer();
+  const { data: profile } = await serverClient
+    .from('profiles')
+    .select('phone_number')
+    .eq('telegram_chat_id', String(chatId))
+    .maybeSingle();
+  return profile?.phone_number || TELNYX_PHONE_NUMBER || undefined;
 }
 
 function generateCode(): string {
@@ -261,9 +242,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (smsCmdMatch) {
       const toNumber = smsCmdMatch[1].replace(/\s/g, '');
       const messageBody = smsCmdMatch[2].trim();
-      const fromNumber = getPhoneForChat(chatId) || TELNYX_PHONE_NUMBER;
+      const fromNumber = (await getPhoneForChat(chatId)) || TELNYX_PHONE_NUMBER;
       if (!fromNumber) {
-        await sendTelegramMessage(chatId, '❌ No outbound phone number configured. Set TELNYX_PHONE_NUMBER or TELEGRAM_NUMBER_MAP.');
+        await sendTelegramMessage(chatId, '❌ No outbound phone number configured. Set TELNYX_PHONE_NUMBER or add a verified sender number in Settings.');
         res.status(200).json({ ok: true });
         return;
       }

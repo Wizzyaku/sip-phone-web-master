@@ -10,36 +10,8 @@ export const config = {
   },
 };
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-
 function normalizePhone(number: string): string {
   return number.replace(/\D/g, '');
-}
-
-function parseNumberMap(): Map<string, string> {
-  const map = new Map<string, string>();
-  const raw = process.env.TELEGRAM_NUMBER_MAP;
-  console.log('TELEGRAM_NUMBER_MAP raw value:', raw);
-  if (!raw) return map;
-  const entries = raw.split(',');
-  for (const entry of entries) {
-    const [phone, chatId] = entry.split(':');
-    if (phone && chatId) {
-      map.set(normalizePhone(phone.trim()), chatId.trim());
-    }
-  }
-  console.log('Parsed number map:', Object.fromEntries(map.entries()));
-  return map;
-}
-
-function getChatIdForNumber(toNumber: string | undefined): string | undefined {
-  const numberMap = parseNumberMap();
-  if (!toNumber) return TELEGRAM_CHAT_ID;
-  const normalized = normalizePhone(toNumber);
-  const chatId = numberMap.get(normalized);
-  console.log('Routing SMS:', { to: toNumber, normalized, matchedChatId: chatId, fallback: TELEGRAM_CHAT_ID });
-  return chatId || TELEGRAM_CHAT_ID;
 }
 
 function parseJsonBody(req: VercelRequest): Record<string, unknown> {
@@ -51,35 +23,6 @@ function parseJsonBody(req: VercelRequest): Record<string, unknown> {
     return JSON.parse(raw);
   }
   return raw as Record<string, unknown>;
-}
-
-async function sendToTelegram(text: string, chatId: string | undefined) {
-  if (!TELEGRAM_BOT_TOKEN || !chatId) {
-    console.warn('Telegram env vars missing:', {
-      hasToken: !!TELEGRAM_BOT_TOKEN,
-      hasChatId: !!chatId,
-    });
-    return;
-  }
-  try {
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'Markdown',
-      }),
-    });
-    const responseBody = await response.text();
-    console.log('Telegram API response:', response.status, responseBody);
-    if (!response.ok) {
-      console.error('Telegram API error:', response.status, responseBody);
-    }
-  } catch (err) {
-    console.error('Telegram send failed:', err);
-  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -222,13 +165,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } catch (billingErr) {
           console.error('Inbound SMS billing error:', billingErr);
         }
-
-        const chatId = getChatIdForNumber(to);
-        console.log('Routing SMS to chat:', { to, normalizedTo: normalizePhone(to), chatId });
-        await sendToTelegram(
-          `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`,
-          chatId
-        );
 
         await notifyTelegramByPhone(
           to,
