@@ -105,13 +105,13 @@ export function useSip() {
       const token = session.data.session?.access_token;
       if (!token) return;
 
-      const res = await fetch(`${API_URL}/call-start`, {
+      const res = await fetch(`${API_URL}/call-billing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ direction, remoteIdentity }),
+        body: JSON.stringify({ action: 'start', direction, remoteIdentity }),
       });
 
       if (res.ok) {
@@ -138,13 +138,14 @@ export function useSip() {
       const token = session.data.session?.access_token;
       if (!token) return;
 
-      const res = await fetch(`${API_URL}/call-end`, {
+      const res = await fetch(`${API_URL}/call-billing`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          action: 'end',
           callId: billing.callId,
           durationSeconds,
           direction,
