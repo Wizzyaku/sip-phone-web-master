@@ -96,6 +96,7 @@ export function Messages() {
   const activeId = useAppStore((s) => s.activeConversation);
   const setActiveConversation = useAppStore((s) => s.setActiveConversation);
   const setStoreMessages = useAppStore((s) => s.setMessages);
+  const setUserNumbers = useAppStore((s) => s.setUserNumbers);
   const addStoreMessage = useAppStore((s) => s.addMessage);
   const mediaUploads = useAppStore((s) => s.mediaUploads);
   const addMediaUpload = useAppStore((s) => s.addMediaUpload);
@@ -223,6 +224,7 @@ export function Messages() {
   useEffect(() => {
     fetchUserPhoneNumbers().then((nums) => {
       setPhoneNumbers(nums);
+      setUserNumbers(nums.map((n) => n.number));
       if (nums.length > 0 && !selectedFromNumber) {
         setSelectedFromNumber(nums[0].number);
       }

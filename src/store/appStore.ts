@@ -76,6 +76,7 @@ interface AppState {
   theme: 'light' | 'dark' | 'system';
   resolvedTheme: 'light' | 'dark';
   telnyxNumber: string | null;
+  userNumbers: string[];
   sipSettings: SipSettings | null;
   notifications: Notification[];
   messages: Message[];
@@ -88,6 +89,7 @@ interface AppState {
   setUser: (user: User) => void;
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   setTelnyxNumber: (number: string | null) => void;
+  setUserNumbers: (numbers: string[]) => void;
   setSipSettings: (settings: SipSettings | null) => void;
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'createdAt'>) => string;
   markNotificationRead: (id: string) => void;
@@ -124,7 +126,23 @@ function getAvatar(name: string): string {
     .toUpperCase() || '??';
 }
 
-function buildConversations(messages: Message[]): Conversation[] {
+function normalizePhone(number: string): string {
+  return number.replace(/\D/g, '');
+}
+
+function getOtherNumberFromConversationId(id: string, userNumbers: string[]): string | null {
+  const parts = id.split('|');
+  if (parts.length !== 2) return null;
+  const [a, b] = parts;
+  const userNorms = userNumbers.map(normalizePhone);
+  const aIsUser = userNorms.includes(normalizePhone(a));
+  const bIsUser = userNorms.includes(normalizePhone(b));
+  if (aIsUser && !bIsUser) return b;
+  if (bIsUser && !aIsUser) return a;
+  return null;
+}
+
+function buildConversations(messages: Message[], userNumbers: string[] = []): Conversation[] {
   const map = new Map<string, Message[]>();
   for (const msg of messages) {
     const key = msg.conversationId || (msg.from === msg.to ? msg.to : [msg.from, msg.to].sort().join('|'));
@@ -137,8 +155,10 @@ function buildConversations(messages: Message[]): Conversation[] {
     const last = sorted[sorted.length - 1];
     const inbound = sorted.filter((m) => m.direction === 'inbound');
     const unread = inbound.filter((m) => m.status !== 'read').length;
-    const contact = last?.direction === 'inbound' ? last.from : last?.to || id;
-    const contactName = last?.direction === 'inbound' ? last.from : last?.to;
+    const otherFromId = getOtherNumberFromConversationId(id, userNumbers);
+    const fallbackContact = last?.direction === 'inbound' ? last.from : last?.to || id;
+    const contact = otherFromId || fallbackContact;
+    const contactName = otherFromId || fallbackContact;
     conversations.push({
       id,
       contact,
@@ -167,6 +187,7 @@ export const useAppStore = create<AppState>()(
       theme: 'system',
       resolvedTheme: 'light',
       telnyxNumber: null,
+      userNumbers: [],
       sipSettings: null,
       notifications: [],
       messages: [],
@@ -188,6 +209,7 @@ export const useAppStore = create<AppState>()(
         set({ theme, resolvedTheme });
       },
       setTelnyxNumber: (telnyxNumber) => set({ telnyxNumber }),
+      setUserNumbers: (userNumbers) => set({ userNumbers }),
       setSipSettings: (sipSettings) => set({ sipSettings }),
       addNotification: (notification) => {
         const now = new Date().toISOString();
@@ -247,11 +269,11 @@ export const useAppStore = create<AppState>()(
         }
       },
       setMessages: (messages) => {
-        set({ messages, conversations: buildConversations(messages) });
+        set({ messages, conversations: buildConversations(messages, get().userNumbers) });
       },
       addMessage: (message) => {
         const messages = [message, ...get().messages];
-        set({ messages, conversations: buildConversations(messages) });
+        set({ messages, conversations: buildConversations(messages, get().userNumbers) });
       },
       setConversations: (conversations) => set({ conversations }),
       updateConversation: (conversation) => {
