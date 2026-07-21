@@ -8,6 +8,7 @@ export const config = {
 };
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
+const TOKENS_PER_USD = 1000;
 
 function parseJsonBody(req: VercelRequest): Record<string, unknown> {
   const raw = req.body as Buffer | string | Record<string, unknown>;
@@ -72,6 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const phoneNumber = body.phoneNumber as string | undefined;
+  const upfrontCost = Number(body.upfrontCost) || 0;
+  const monthlyCost = Number(body.monthlyCost) || 0;
   if (!phoneNumber) {
     res.status(400).json({ error: 'Missing phoneNumber' });
     return;
@@ -82,8 +85,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // Calculate total cost in tokens (1000 tokens = $1)
+  const totalCostUSD = upfrontCost + monthlyCost;
+  const totalTokensNeeded = Math.ceil(totalCostUSD * TOKENS_PER_USD);
+
+  // Step 1: Check and debit user's token balance
+  const { data: debitResult, error: debitError } = await serverClient.rpc('debit_tokens', {
+    p_user_id: userData.user.id,
+    p_tokens: totalTokensNeeded,
+    p_reference: `NUM-${phoneNumber}-${Date.now()}`,
+  });
+
+  if (debitError) {
+    console.error('Debit tokens error:', debitError.message);
+    res.status(500).json({ error: 'Failed to process payment. Please try again.' });
+    return;
+  }
+
+  if (debitResult !== true) {
+    res.status(402).json({
+      error: `Insufficient token balance. You need ${totalTokensNeeded} tokens (≈$${totalCostUSD.toFixed(2)}) to purchase this number.`,
+      tokensNeeded: totalTokensNeeded,
+      costUSD: totalCostUSD,
+    });
+    return;
+  }
+
   try {
-    // Step 1: Create a number order via Telnyx API
+    // Step 2: Purchase the number from Telnyx using admin balance
     const orderResponse = await fetch('https://api.telnyx.com/v2/number_orders', {
       method: 'POST',
       headers: {
@@ -99,7 +128,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!orderResponse.ok) {
       console.error('Telnyx purchase error:', orderData);
-      res.status(orderResponse.status).json({ error: orderData?.errors?.[0]?.detail || 'Failed to purchase number' });
+      // Refund tokens since Telnyx purchase failed
+      await serverClient.rpc('credit_tokens', {
+        p_user_id: userData.user.id,
+        p_tokens: totalTokensNeeded,
+        p_reference: `REFUND-${phoneNumber}-${Date.now()}`,
+      });
+      res.status(orderResponse.status).json({
+        error: orderData?.errors?.[0]?.detail || 'Failed to purchase number. Your tokens have been refunded.',
+      });
       return;
     }
 
@@ -108,7 +145,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const purchased = orderPhoneNumbers[0];
 
     if (!purchased) {
-      res.status(500).json({ error: 'No purchase record returned from Telnyx' });
+      // Refund tokens
+      await serverClient.rpc('credit_tokens', {
+        p_user_id: userData.user.id,
+        p_tokens: totalTokensNeeded,
+        p_reference: `REFUND-${phoneNumber}-${Date.now()}`,
+      });
+      res.status(500).json({ error: 'No purchase record returned from Telnyx. Tokens refunded.' });
       return;
     }
 
@@ -126,10 +169,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       features.push('voice', 'sms');
     }
 
-    const monthlyCost = Number(purchased?.cost) || 1.0;
+    const actualMonthlyCost = Number(purchased?.cost) || monthlyCost || 1.0;
     const flag = flagForCountry(countryCode);
 
-    // Step 2: Save the purchased number to Supabase for this user
+    // Step 3: Save the purchased number to Supabase for this user
     const { error: insertError } = await serverClient
       .from('phone_numbers')
       .insert({
@@ -137,7 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         number: purchasedNumber,
         flag,
         features,
-        monthly_cost: monthlyCost,
+        monthly_cost: actualMonthlyCost,
         active: purchaseStatus === 'active',
         label: '',
       });
@@ -146,17 +189,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('Supabase insert error after Telnyx purchase:', insertError.message);
     }
 
+    // Step 4: Record the transaction
+    await serverClient.from('transactions').insert({
+      user_id: userData.user.id,
+      reference: `NUM-${phoneNumber}-${Date.now()}`,
+      tokens: -totalTokensNeeded,
+      amount_minor: 0,
+      currency: 'TOKENS',
+      provider: 'balance',
+      status: 'success',
+      metadata: {
+        type: 'number_purchase',
+        phone_number: purchasedNumber,
+        upfront_cost: upfrontCost,
+        monthly_cost: actualMonthlyCost,
+      },
+    });
+
     res.status(200).json({
       success: true,
       phoneNumber: purchasedNumber,
       status: purchaseStatus,
       flag,
       features,
-      monthlyCost,
+      monthlyCost: actualMonthlyCost,
+      tokensSpent: totalTokensNeeded,
     });
   } catch (err) {
     const error = err as Error;
     console.error('Purchase number error:', error);
-    res.status(500).json({ error: error.message });
+    // Refund tokens on unexpected error
+    await serverClient.rpc('credit_tokens', {
+      p_user_id: userData.user.id,
+      p_tokens: totalTokensNeeded,
+      p_reference: `REFUND-${phoneNumber}-${Date.now()}`,
+    });
+    res.status(500).json({ error: error.message + ' Your tokens have been refunded.' });
   }
 }

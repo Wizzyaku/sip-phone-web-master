@@ -226,6 +226,22 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Function to safely debit tokens by a server-side caller.
+-- Returns true if the debit succeeded, false if insufficient balance.
+create or replace function public.debit_tokens(p_user_id uuid, p_tokens bigint, p_reference text)
+returns boolean as $$
+declare
+  current_balance bigint;
+begin
+  select tokens into current_balance from public.user_balances where id = p_user_id for update;
+  if current_balance is null or current_balance < p_tokens then
+    return false;
+  end if;
+  update public.user_balances set tokens = current_balance - p_tokens where id = p_user_id;
+  return true;
+end;
+$$ language plpgsql security definer;
+
 -- ------------------------------------------------------------
 -- 6. User phone numbers
 --    Stores virtual phone numbers purchased by each user.

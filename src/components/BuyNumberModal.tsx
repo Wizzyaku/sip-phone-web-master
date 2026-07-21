@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, Check, X, Loader2, AlertCircle } from 'lucide-react';
+import { Search, Check, X, Loader2, AlertCircle, Wallet, CreditCard } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
+import { fetchBalance, formatTokens } from '../lib/balance';
 
 interface AvailableNumber {
   id: string;
@@ -37,6 +38,8 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
+  const [paymentMethod, setPaymentMethod] = useState<'balance' | 'korapay'>('balance');
+  const [userTokens, setUserTokens] = useState(0);
 
   const fetchNumbers = useCallback(async () => {
     setLoading(true);
@@ -81,6 +84,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
   useEffect(() => {
     if (open) {
       fetchNumbers();
+      fetchBalance().then((b) => setUserTokens(b?.tokens ?? 0));
     }
   }, [open, activeFilter, fetchNumbers]);
 
@@ -109,28 +113,64 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
         return;
       }
 
-      const response = await fetch('/api/purchase-number', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ phoneNumber: opt.number }),
-      });
+      if (paymentMethod === 'korapay') {
+        // Initiate Korapay payment for number purchase
+        const response = await fetch('/api/initiate-number-purchase', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            phoneNumber: opt.number,
+            upfrontCost: opt.upfrontCost,
+            monthlyCost: opt.monthlyCost,
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        setError(data?.error || 'Failed to purchase number.');
+        if (!response.ok) {
+          setError(data?.error || data?.korapayMessage || 'Failed to initiate payment.');
+          setPurchasing(false);
+          return;
+        }
+
+        if (data.checkoutUrl) {
+          window.location.href = data.checkoutUrl;
+        } else {
+          setError('No checkout URL returned.');
+          setPurchasing(false);
+        }
+      } else {
+        // Pay with token balance
+        const response = await fetch('/api/purchase-number', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            phoneNumber: opt.number,
+            upfrontCost: opt.upfrontCost,
+            monthlyCost: opt.monthlyCost,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data?.error || 'Failed to purchase number.');
+          setPurchasing(false);
+          return;
+        }
+
+        setSelectedNumber(null);
+        setSelectedPrice(null);
         setPurchasing(false);
-        return;
+        onPurchased?.();
+        onClose();
       }
-
-      setSelectedNumber(null);
-      setSelectedPrice(null);
-      setPurchasing(false);
-      onPurchased?.();
-      onClose();
     } catch {
       setError('Network error. Please try again.');
       setPurchasing(false);
@@ -247,6 +287,34 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             {error && availableNumbers.length > 0 && (
               <p className="text-[11px] font-bold text-red-500 text-center mb-2">{error}</p>
             )}
+            {selectedNumber && (
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => setPaymentMethod('balance')}
+                  className={cn(
+                    'flex-1 h-10 rounded-[12px] flex items-center justify-center gap-1.5 text-[11px] font-bold transition-all',
+                    paymentMethod === 'balance'
+                      ? 'bg-indigo-50 border border-indigo-200 text-indigo-600 dark:bg-indigo-900/30 dark:border-indigo-700'
+                      : 'bg-slate-50 border border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700'
+                  )}
+                >
+                  <Wallet className="w-3.5 h-3.5" />
+                  {formatTokens(userTokens)} tok
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('korapay')}
+                  className={cn(
+                    'flex-1 h-10 rounded-[12px] flex items-center justify-center gap-1.5 text-[11px] font-bold transition-all',
+                    paymentMethod === 'korapay'
+                      ? 'bg-indigo-50 border border-indigo-200 text-indigo-600 dark:bg-indigo-900/30 dark:border-indigo-700'
+                      : 'bg-slate-50 border border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700'
+                  )}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  Korapay
+                </button>
+              </div>
+            )}
             <button
               disabled={!selectedNumber || purchasing}
               onClick={handlePurchase}
@@ -259,7 +327,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             >
               {purchasing ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-              ) : selectedNumber ? `Purchase · $${selectedPrice?.toFixed(2)}/mo` : 'Select a Number'}
+              ) : selectedNumber ? (paymentMethod === 'balance' ? `Pay ${formatTokens(Math.ceil((selectedPrice! + (availableNumbers.find(n => n.id === selectedNumber)?.upfrontCost ?? 0)) * 1000))} tokens` : `Pay via Korapay`) : 'Select a Number'}
             </button>
           </div>
         </div>
@@ -362,6 +430,34 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             {error && availableNumbers.length > 0 && (
               <p className="text-xs font-bold text-red-500 text-center mb-2">{error}</p>
             )}
+            {selectedNumber && (
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={() => setPaymentMethod('balance')}
+                  className={cn(
+                    'flex-1 h-11 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all',
+                    paymentMethod === 'balance'
+                      ? 'bg-indigo-50 border border-indigo-200 text-indigo-600 dark:bg-indigo-900/30 dark:border-indigo-700'
+                      : 'bg-slate-50 border border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700'
+                  )}
+                >
+                  <Wallet className="w-4 h-4" />
+                  Balance: {formatTokens(userTokens)} tok
+                </button>
+                <button
+                  onClick={() => setPaymentMethod('korapay')}
+                  className={cn(
+                    'flex-1 h-11 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all',
+                    paymentMethod === 'korapay'
+                      ? 'bg-indigo-50 border border-indigo-200 text-indigo-600 dark:bg-indigo-900/30 dark:border-indigo-700'
+                      : 'bg-slate-50 border border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700'
+                  )}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Pay with Korapay
+                </button>
+              </div>
+            )}
             <button
               disabled={!selectedNumber || purchasing}
               onClick={handlePurchase}
@@ -374,7 +470,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             >
               {purchasing ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing...</>
-              ) : selectedNumber ? `Purchase · $${selectedPrice?.toFixed(2)}/mo` : 'Select a Number'}
+              ) : selectedNumber ? (paymentMethod === 'balance' ? `Pay ${formatTokens(Math.ceil((selectedPrice! + (availableNumbers.find(n => n.id === selectedNumber)?.upfrontCost ?? 0)) * 1000))} tokens` : `Pay via Korapay`) : 'Select a Number'}
             </button>
           </div>
         </div>
