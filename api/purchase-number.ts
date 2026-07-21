@@ -91,7 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        phone_numbers: [phoneNumber],
+        phone_numbers: [{ phone_number: phoneNumber }],
       }),
     });
 
@@ -103,8 +103,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    const orderRecords = (orderData?.data as Array<Record<string, unknown>>) || [];
-    const purchased = orderRecords[0];
+    const orderObj = orderData?.data as Record<string, unknown> | undefined;
+    const orderPhoneNumbers = (orderObj?.phone_numbers as Array<Record<string, unknown>>) || [];
+    const purchased = orderPhoneNumbers[0];
 
     if (!purchased) {
       res.status(500).json({ error: 'No purchase record returned from Telnyx' });
@@ -125,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       features.push('voice', 'sms');
     }
 
-    const monthlyCost = (purchased?.cost as number) || 1.0;
+    const monthlyCost = Number(purchased?.cost) || 1.0;
     const flag = flagForCountry(countryCode);
 
     // Step 2: Save the purchased number to Supabase for this user
