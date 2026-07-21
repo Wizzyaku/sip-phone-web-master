@@ -16,11 +16,13 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'sip-vendor': ['sip.js'],
-          'supabase-vendor': ['@supabase/supabase-js'],
-          'ui-vendor': ['lucide-react', 'axios'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('sip.js')) return 'sip-vendor';
+            if (id.includes('@supabase')) return 'supabase-vendor';
+            if (id.includes('lucide-react') || id.includes('axios')) return 'ui-vendor';
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'react-vendor';
+          }
         },
       },
     },
