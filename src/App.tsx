@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider, Navigate, useRouteError } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate, useRouteError, Outlet } from 'react-router-dom';
 import { Layout } from './layout/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NotificationToast } from './components/NotificationToast';
@@ -10,6 +10,7 @@ import { useNotifications } from './hooks/useNotifications';
 import { useBalance } from './hooks/useBalance';
 import { AuthRequired } from './components/AuthRoute';
 import { AuthModal } from './components/AuthModal';
+import { ScrollToTop } from './components/ScrollToTop';
 import { supabase } from './lib/supabase';
 import { fetchProfile } from './lib/profile';
 
@@ -96,6 +97,12 @@ const router = createBrowserRouter([
   {
     path: '/',
     errorElement: <RouteError />,
+    element: (
+      <>
+        <ScrollToTop />
+        <Outlet />
+      </>
+    ),
     children: [
       { index: true, element: <Home /> },
       { path: 'contact', element: <Contact /> },

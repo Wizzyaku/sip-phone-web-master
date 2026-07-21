@@ -61,6 +61,10 @@ export function Contact() {
           <div className="border-t border-border bg-background">
             <div className="px-4 py-4 space-y-3">
               <Link to="/" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Home</Link>
+              <a href="/#features" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Features</a>
+              <a href="/#pricing" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
+              <a href="/#faq" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
+              <Link to="/contact" className="block text-sm font-medium text-muted-foreground hover:text-foreground" onClick={() => setMobileMenuOpen(false)}>Contact</Link>
               <div className="pt-3 flex flex-col gap-2">
                 <Button variant="outline" className="w-full font-semibold" onClick={() => { openAuth('login'); setMobileMenuOpen(false); }}>Sign in</Button>
                 <Button className="w-full font-semibold" onClick={() => { openAuth('signup'); setMobileMenuOpen(false); }}>Get Started Free</Button>
