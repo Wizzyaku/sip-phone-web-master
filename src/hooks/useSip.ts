@@ -233,6 +233,29 @@ export function useSip() {
           startTimer();
           return updated;
         });
+
+        // Verify mic track is live and enabled
+        const pc = getPeerConnection(session);
+        if (pc) {
+          const senders = pc.getSenders();
+          const audioSender = senders.find((s) => s.track?.kind === 'audio');
+          if (audioSender?.track) {
+            console.log('[SIP] Mic track readyState:', audioSender.track.readyState, 'enabled:', audioSender.track.enabled, 'muted:', audioSender.track.muted);
+            // Ensure track is enabled (not muted) at call start
+            audioSender.track.enabled = true;
+          } else {
+            console.warn('[SIP] No audio sender found — far end may not hear you!');
+          }
+
+          // Monitor ICE connection state
+          pc.oniceconnectionstatechange = () => {
+            console.log('[SIP] ICE connection state:', pc.iceConnectionState);
+            if (pc.iceConnectionState === 'failed') {
+              console.error('[SIP] ICE connection failed — audio may not work. Consider restarting call.');
+            }
+          };
+        }
+
         // Start billing when call is established
         startCallBilling(direction, remoteIdentity);
       } else if (newState === SessionState.Terminated) {
@@ -269,7 +292,16 @@ export function useSip() {
 
         const inviter = new Inviter(userAgentRef.current, targetUri, {
           sessionDescriptionHandlerOptions: {
-            constraints: { audio: true, video: false },
+            constraints: {
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 48000,
+              },
+              video: false,
+            },
           },
         });
 
@@ -330,7 +362,22 @@ export function useSip() {
           },
         },
         sessionDescriptionHandlerFactoryOptions: {
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            {
+              urls: 'turn:turn.telnyx.com:3478',
+              username: 'turnuser',
+              credential: 'turnpassword',
+            },
+            {
+              urls: 'turn:turn.telnyx.com:3478?transport=tcp',
+              username: 'turnuser',
+              credential: 'turnpassword',
+            },
+          ],
+          iceTransportPolicy: 'all',
         },
       };
 
@@ -476,7 +523,16 @@ export function useSip() {
       session
         .accept({
           sessionDescriptionHandlerOptions: {
-            constraints: { audio: true, video: false },
+            constraints: {
+              audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true,
+                channelCount: 1,
+                sampleRate: 48000,
+              },
+              video: false,
+            },
           },
         })
         .catch((err: Error) => {
