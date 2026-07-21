@@ -233,6 +233,7 @@ export function Calls() {
       ? `sip:${directoryUser.sipUsername}@sip.telnyx.com`
       : number.trim();
     call(target);
+    setDialerOpen(false);
   };
 
   const activeLine = telnyxNumber || settings.phoneNumber || 'No number assigned';

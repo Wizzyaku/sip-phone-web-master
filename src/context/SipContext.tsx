@@ -1,12 +1,10 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
-import { Card, CardContent } from '../components/ui/card';
-import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Circle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useSip, type ActiveCall } from '../hooks/useSip';
 import { fetchSipCredentials } from '../lib/sipCredentials';
 import { useAppStore } from '../store/appStore';
+import { useIsDesktop } from '../hooks/useIsDesktop';
 
 interface SipContextValue {
   status: ReturnType<typeof useSip>['status'];
@@ -67,13 +65,15 @@ export function SipProvider({ children }: { children: ReactNode }) {
     <SipContext.Provider value={sip}>
       {children}
       <audio ref={remoteAudioRef} className="hidden" autoPlay playsInline />
-      <IncomingCallBanner />
+      <CallModal />
     </SipContext.Provider>
   );
 }
 
-function IncomingCallBanner() {
+function CallModal() {
   const { activeCall, hangup, toggleMute, toggleSpeaker, acceptCall, rejectCall } = useSipContext();
+  const isDesktop = useIsDesktop();
+  const [recording, setRecording] = useState(false);
 
   if (!activeCall) return null;
 
@@ -82,93 +82,187 @@ function IncomingCallBanner() {
     .replace(/^sip:/i, '')
     .replace(/@sip\.telnyx\.com$/i, '');
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-16 sm:pt-24">
-      <Card className="w-full max-w-sm overflow-hidden border-border bg-background shadow-2xl">
-        <CardContent className="flex flex-col items-center gap-4 p-5">
-          {/* Call status */}
-          <div className="text-center">
-            <p className="text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground">
-              {activeCall.direction === 'incoming' ? 'Incoming call' : 'Outgoing call'}
-            </p>
-            <p className="mt-1 max-w-[260px] truncate text-xl font-bold text-foreground" title={displayIdentity}>
-              {displayIdentity}
-            </p>
-            <div className="mt-2 flex items-center justify-center gap-2">
-              <Badge variant="outline" className="text-[10px]">
-                {activeCall.status}
-              </Badge>
-              {activeCall.status === 'In call' && activeCall.startTime && (
-                <Badge variant="secondary" className="text-[10px]">
-                  {formatDuration(activeCall.durationSeconds)}
-                </Badge>
-              )}
-            </div>
-          </div>
+  const toggleRecording = () => setRecording((r) => !r);
 
-          {/* Action buttons */}
-          <div className="flex w-full items-center justify-center gap-4">
-            {isRingingIncoming ? (
-              <>
-                <Button
-                  variant="default"
-                  size="icon"
-                  className="h-12 w-12 rounded-full bg-green-600 text-white shadow-lg shadow-green-600/25 hover:bg-green-700"
-                  onClick={acceptCall}
-                  aria-label="Accept call"
-                >
-                  <Phone className="h-5 w-5" />
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="h-12 w-12 rounded-full shadow-lg shadow-destructive/25"
-                  onClick={rejectCall}
-                  aria-label="Reject call"
-                >
-                  <PhoneOff className="h-5 w-5" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant={activeCall.muted ? 'default' : 'outline'}
-                  size="icon"
-                  className={cn(
-                    'h-12 w-12 rounded-full shadow-sm',
-                    activeCall.muted && 'bg-amber-500 text-white hover:bg-amber-600'
-                  )}
-                  onClick={toggleMute}
-                  aria-label={activeCall.muted ? 'Unmute' : 'Mute'}
-                >
-                  {activeCall.muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                </Button>
-                <Button
-                  variant={activeCall.speakerOn ? 'default' : 'outline'}
-                  size="icon"
-                  className={cn(
-                    'h-12 w-12 rounded-full shadow-sm',
-                    activeCall.speakerOn && 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  )}
-                  onClick={toggleSpeaker}
-                  aria-label={activeCall.speakerOn ? 'Turn speaker off' : 'Turn speaker on'}
-                >
-                  {activeCall.speakerOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="h-12 w-12 rounded-full shadow-lg shadow-destructive/25"
-                  onClick={hangup}
-                  aria-label="Hang up"
-                >
-                  <PhoneOff className="h-5 w-5" />
-                </Button>
-              </>
+  // Shared call info
+  const callInfo = (
+    <div className="flex flex-col items-center gap-2">
+      <div className={cn(
+        'w-20 h-20 rounded-full flex items-center justify-center text-3xl font-extrabold text-white shadow-2xl',
+        activeCall.direction === 'incoming' ? 'bg-gradient-to-br from-emerald-400 to-teal-600' : 'bg-gradient-to-br from-indigo-400 to-purple-600'
+      )}>
+        {displayIdentity.charAt(0).toUpperCase()}
+      </div>
+      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/60">
+        {activeCall.direction === 'incoming' ? 'Incoming call' : 'Outgoing call'}
+      </p>
+      <h2 className="text-2xl font-extrabold text-white tracking-tight max-w-full truncate" title={displayIdentity}>
+        {displayIdentity}
+      </h2>
+      <div className="flex items-center gap-2 mt-1">
+        <span className={cn(
+          'text-sm font-bold px-3 py-1 rounded-full',
+          activeCall.status === 'In call' ? 'bg-emerald-500/20 text-emerald-300' :
+          activeCall.status === 'Ringing' ? 'bg-amber-500/20 text-amber-300' :
+          'bg-white/10 text-white/70'
+        )}>
+          {activeCall.status}
+        </span>
+        {activeCall.status === 'In call' && activeCall.startTime && (
+          <span className="text-sm font-bold text-white/90 tabular-nums">
+            {formatDuration(activeCall.durationSeconds)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+
+  // Shared controls
+  const inCallControls = (
+    <div className="flex items-center justify-center gap-4">
+      <button
+        onClick={toggleMute}
+        className={cn(
+          'w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90',
+          activeCall.muted ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' : 'bg-white/10 text-white hover:bg-white/20'
+        )}
+        aria-label={activeCall.muted ? 'Unmute' : 'Mute'}
+      >
+        {activeCall.muted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+      </button>
+      <button
+        onClick={toggleSpeaker}
+        className={cn(
+          'w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90',
+          activeCall.speakerOn ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30' : 'bg-white/10 text-white hover:bg-white/20'
+        )}
+        aria-label={activeCall.speakerOn ? 'Turn speaker off' : 'Turn speaker on'}
+      >
+        {activeCall.speakerOn ? <Volume2 className="w-6 h-6" /> : <VolumeX className="w-6 h-6" />}
+      </button>
+      <button
+        onClick={toggleRecording}
+        className={cn(
+          'w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-90',
+          recording ? 'bg-red-500 text-white shadow-lg shadow-red-500/30' : 'bg-white/10 text-white hover:bg-white/20'
+        )}
+        aria-label={recording ? 'Stop recording' : 'Start recording'}
+      >
+        <Circle className={cn('w-6 h-6', recording && 'animate-pulse')} fill={recording ? 'currentColor' : 'none'} />
+      </button>
+      <button
+        onClick={hangup}
+        className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center shadow-xl shadow-red-500/40 hover:bg-red-600 active:scale-90 transition-all"
+        aria-label="Hang up"
+      >
+        <PhoneOff className="w-7 h-7" />
+      </button>
+    </div>
+  );
+
+  const ringingControls = (
+    <div className="flex items-center justify-center gap-6">
+      <button
+        onClick={rejectCall}
+        className="w-16 h-16 rounded-full bg-red-500 text-white flex items-center justify-center shadow-xl shadow-red-500/40 hover:bg-red-600 active:scale-90 transition-all"
+        aria-label="Reject call"
+      >
+        <PhoneOff className="w-7 h-7" />
+      </button>
+      <button
+        onClick={acceptCall}
+        className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xl shadow-emerald-500/40 hover:bg-emerald-600 active:scale-90 transition-all"
+        aria-label="Accept call"
+      >
+        <Phone className="w-7 h-7" fill="currentColor" />
+      </button>
+    </div>
+  );
+
+  if (!isDesktop) {
+    // Mobile: Full screen with gradient background
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col animate-slide-in-right">
+        <div className={cn(
+          'absolute inset-0',
+          activeCall.direction === 'incoming'
+            ? 'bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900'
+            : 'bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900'
+        )} />
+
+        <div className="relative flex-1 flex flex-col items-center justify-between py-16 px-6">
+          {/* Top: Recording indicator */}
+          <div className="w-full flex items-center justify-between">
+            <button
+              onClick={toggleRecording}
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                recording ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white/40'
+              )}
+            >
+              <Circle className={cn('w-3 h-3', recording && 'animate-pulse')} fill={recording ? 'currentColor' : 'none'} />
+              {recording ? 'Recording' : 'Record'}
+            </button>
+            {recording && (
+              <span className="text-xs font-bold text-red-400 animate-pulse">● REC</span>
             )}
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Center: Call info */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-6">
+            {callInfo}
+          </div>
+
+          {/* Bottom: Controls */}
+          <div className="pb-8">
+            {isRingingIncoming ? ringingControls : inCallControls}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop: Right-side slide-out modal, ~50% width, full height
+  return (
+    <div className="fixed inset-0 z-[100] flex justify-end">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div
+        className={cn(
+          'relative w-1/2 h-full flex flex-col animate-slide-in-right',
+          activeCall.direction === 'incoming'
+            ? 'bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900'
+            : 'bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900'
+        )}
+      >
+        <div className="flex-1 flex flex-col items-center justify-between py-12 px-8">
+          {/* Top: Recording indicator */}
+          <div className="w-full flex items-center justify-between">
+            <button
+              onClick={toggleRecording}
+              className={cn(
+                'flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all',
+                recording ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-white/40'
+              )}
+            >
+              <Circle className={cn('w-3 h-3', recording && 'animate-pulse')} fill={recording ? 'currentColor' : 'none'} />
+              {recording ? 'Recording' : 'Record'}
+            </button>
+            {recording && (
+              <span className="text-xs font-bold text-red-400 animate-pulse">● REC</span>
+            )}
+          </div>
+
+          {/* Center: Call info */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-6">
+            {callInfo}
+          </div>
+
+          {/* Bottom: Controls */}
+          <div className="pb-6">
+            {isRingingIncoming ? ringingControls : inCallControls}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

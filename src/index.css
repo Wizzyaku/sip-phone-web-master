@@ -190,4 +190,10 @@
     background-image: radial-gradient(circle, #334155 1px, transparent 1px);
     background-size: 20px 20px;
   }
+
+  @keyframes slideInRight {
+    0% { transform: translateX(100%); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+  }
+  .animate-slide-in-right { animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 }
