@@ -1,20 +1,23 @@
-import { useState } from 'react';
-import { Search, Check, X, Loader2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, Check, X, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { insertPhoneNumber } from '../lib/phoneNumbers';
+import { supabase } from '../lib/supabase';
 
-const availableNumbers = [
-  { id: 'a1', number: '+1 (310) 555-0199', flag: '🇺🇸', features: ['Voice', 'SMS'], price: 7.0 },
-  { id: 'a2', number: '+1 (212) 555-0844', flag: '🇺🇸', features: ['Voice', 'SMS', 'MMS'], price: 8.5 },
-  { id: 'a3', number: '+1 (415) 555-0912', flag: '🇺🇸', features: ['Voice', 'SMS'], price: 7.0 },
-  { id: 'a4', number: '+44 20 7946 0712', flag: '🇬🇧', features: ['Voice', 'SMS'], price: 8.0 },
-];
+interface AvailableNumber {
+  id: string;
+  number: string;
+  flag: string;
+  features: string[];
+  price: number;
+}
 
 const countryFilters = [
-  { label: '🇺🇸 US (+1)' },
-  { label: '🇬🇧 UK (+44)' },
-  { label: '🇨🇦 CA (+1)' },
-  { label: 'Toll-Free' },
+  { label: '🇺🇸 US', code: 'US' },
+  { label: '🇬🇧 UK', code: 'GB' },
+  { label: '🇨🇦 CA', code: 'CA' },
+  { label: '🇦🇺 AU', code: 'AU' },
+  { label: '🇩🇪 DE', code: 'DE' },
+  { label: '🇫🇷 FR', code: 'FR' },
 ];
 
 interface BuyNumberModalProps {
@@ -29,6 +32,55 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
   const [activeFilter, setActiveFilter] = useState(0);
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
+
+  const fetchNumbers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session) {
+        setError('You must be signed in to search for numbers.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/search-numbers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          countryCode: countryFilters[activeFilter].code,
+          search: searchTerm || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data?.error || 'Failed to fetch available numbers.');
+        setAvailableNumbers([]);
+      } else {
+        setAvailableNumbers(data.numbers || []);
+      }
+    } catch {
+      setError('Network error. Please try again.');
+      setAvailableNumbers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeFilter, searchTerm]);
+
+  useEffect(() => {
+    if (open) {
+      fetchNumbers();
+    }
+  }, [open, activeFilter, fetchNumbers]);
 
   if (!open) return null;
 
@@ -46,19 +98,51 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
     setPurchasing(true);
     setError(null);
 
-    const featuresLower = opt.features.map((f) => f.toLowerCase());
-    const result = await insertPhoneNumber(opt.number, opt.flag, featuresLower, opt.price);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData.session;
+      if (!session) {
+        setError('You must be signed in to purchase a number.');
+        setPurchasing(false);
+        return;
+      }
 
-    if (result) {
+      const response = await fetch('/api/purchase-number', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ phoneNumber: opt.number }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data?.error || 'Failed to purchase number.');
+        setPurchasing(false);
+        return;
+      }
+
       setSelectedNumber(null);
       setSelectedPrice(null);
       setPurchasing(false);
       onPurchased?.();
       onClose();
-    } else {
-      setError('Failed to purchase number. Please try again.');
+    } catch {
+      setError('Network error. Please try again.');
       setPurchasing(false);
     }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+  };
+
+  const handleFilterChange = (idx: number) => {
+    setActiveFilter(idx);
+    setSelectedNumber(null);
+    setSelectedPrice(null);
   };
 
   return (
@@ -79,7 +163,9 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
               <Search className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 pointer-events-none w-4 h-4 my-auto" />
               <input
                 type="text"
-                placeholder="Search Country, Area Code or Number..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search area code or number..."
                 className="w-full h-11 bg-white border border-slate-200 rounded-[14px] pl-10 pr-3 text-[13px] font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
               />
             </div>
@@ -87,7 +173,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
               {countryFilters.map((cf, i) => (
                 <button
                   key={cf.label}
-                  onClick={() => setActiveFilter(i)}
+                  onClick={() => handleFilterChange(i)}
                   className={cn(
                     'px-3.5 py-1.5 rounded-[10px] text-[11px] font-bold whitespace-nowrap transition-all',
                     activeFilter === i
@@ -101,8 +187,22 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             </div>
           </div>
           <div className="flex-grow overflow-y-auto px-4 py-3 flex flex-col gap-2.5">
-            <p className="text-[11px] font-bold text-slate-500 mb-1 dark:text-slate-400">Available Numbers in <span className="text-slate-800 dark:text-slate-100">United States</span></p>
-            {availableNumbers.map((opt) => (
+            <p className="text-[11px] font-bold text-slate-500 mb-1 dark:text-slate-400">Available Numbers in <span className="text-slate-800 dark:text-slate-100">{countryFilters[activeFilter].label}</span></p>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+              </div>
+            ) : error && availableNumbers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <AlertCircle className="w-8 h-8 text-slate-300 mb-3" />
+                <p className="text-xs font-bold text-slate-500">{error}</p>
+                <button onClick={fetchNumbers} className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800">Try again</button>
+              </div>
+            ) : availableNumbers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <p className="text-xs font-bold text-slate-500">No numbers found. Try a different search or country.</p>
+              </div>
+            ) : availableNumbers.map((opt) => (
               <div
                 key={opt.id}
                 onClick={() => selectNumber(opt.id, opt.price)}
@@ -139,7 +239,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             ))}
           </div>
           <div className="shrink-0 p-4 border-t border-slate-100 bg-white shadow-[0_-4px_15px_rgba(0,0,0,0.03)] dark:bg-slate-900 dark:border-slate-700">
-            {error && (
+            {error && availableNumbers.length > 0 && (
               <p className="text-[11px] font-bold text-red-500 text-center mb-2">{error}</p>
             )}
             <button
@@ -175,7 +275,9 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search Country, Area Code or Number..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                placeholder="Search area code or number..."
                 className="w-full h-11 bg-white border border-slate-200 rounded-xl pl-11 pr-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
               />
             </div>
@@ -183,7 +285,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
               {countryFilters.map((cf, i) => (
                 <button
                   key={cf.label}
-                  onClick={() => setActiveFilter(i)}
+                  onClick={() => handleFilterChange(i)}
                   className={cn(
                     'px-4 py-2 rounded-xl text-xs font-bold transition-all',
                     activeFilter === i
@@ -197,8 +299,22 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             </div>
           </div>
           <div className="flex-grow overflow-y-auto px-5 py-4 flex flex-col gap-3">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Available Numbers in <span className="text-slate-800 dark:text-slate-100">United States</span></p>
-            {availableNumbers.map((opt) => (
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Available Numbers in <span className="text-slate-800 dark:text-slate-100">{countryFilters[activeFilter].label}</span></p>
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-600" />
+              </div>
+            ) : error && availableNumbers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <AlertCircle className="w-8 h-8 text-slate-300 mb-3" />
+                <p className="text-xs font-bold text-slate-500">{error}</p>
+                <button onClick={fetchNumbers} className="mt-3 text-xs font-bold text-indigo-600 hover:text-indigo-800">Try again</button>
+              </div>
+            ) : availableNumbers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <p className="text-xs font-bold text-slate-500">No numbers found. Try a different search or country.</p>
+              </div>
+            ) : availableNumbers.map((opt) => (
               <div
                 key={opt.id}
                 onClick={() => selectNumber(opt.id, opt.price)}
@@ -235,7 +351,7 @@ export function BuyNumberModal({ open, onClose, onPurchased }: BuyNumberModalPro
             ))}
           </div>
           <div className="shrink-0 p-5 border-t border-slate-100 bg-white dark:bg-slate-900 dark:border-slate-700">
-            {error && (
+            {error && availableNumbers.length > 0 && (
               <p className="text-xs font-bold text-red-500 text-center mb-2">{error}</p>
             )}
             <button
