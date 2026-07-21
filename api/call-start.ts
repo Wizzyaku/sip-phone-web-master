@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Check minimum balance threshold
   const { data: balanceData } = await serverClient
     .from('user_balances')
-    .select('tokens, locked_balance')
+    .select('tokens')
     .eq('id', userData.user.id)
     .maybeSingle();
 
@@ -77,27 +77,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     direction === 'incoming' ? 'incoming' : 'outgoing'
   );
 
-  // Reserve coins (move from tokens to locked_balance)
-  const { data: reserveResult, error: reserveError } = await serverClient.rpc('reserve_coins', {
-    p_user_id: userData.user.id,
-    p_coins: reserveAmount,
-  });
-
-  if (reserveError) {
-    console.error('Reserve coins error:', reserveError.message);
-    res.status(500).json({ error: 'Failed to reserve coins for call.' });
-    return;
-  }
-
-  if (reserveResult !== true) {
-    res.status(402).json({
-      error: `Insufficient balance. You need at least ${reserveAmount} coins to start this call.`,
-      required: reserveAmount,
+  // Try to reserve coins (move from tokens to locked_balance)
+  // If the RPC doesn't exist yet (schema not applied), we still proceed —
+  // the call-end endpoint will charge directly via debit_tokens as fallback
+  let reservedCoins = 0;
+  try {
+    const { data: reserveResult, error: reserveError } = await serverClient.rpc('reserve_coins', {
+      p_user_id: userData.user.id,
+      p_coins: reserveAmount,
     });
-    return;
+
+    if (reserveError) {
+      console.warn('[Billing] reserve_coins RPC failed (schema may not be applied):', reserveError.message);
+      // Don't fail — proceed without reserving, fallback at call-end
+    } else if (reserveResult === true) {
+      reservedCoins = reserveAmount;
+      console.log('[Billing] Reserved', reserveAmount, 'coins for call');
+    } else {
+      // Insufficient balance even for 60s reserve — still proceed, will charge at end
+      console.warn('[Billing] Insufficient balance for reserve, proceeding without lock');
+    }
+  } catch (reserveErr) {
+    console.warn('[Billing] reserve_coins error, proceeding without lock:', reserveErr);
   }
 
-  // Create a call log entry
+  // Create a call log entry (always, even if reserve failed)
+  // Only use columns that existed in the original schema — cost_coins/status
+  // are added in the new schema migration but may not be applied yet
   const { data: callLog, error: logError } = await serverClient
     .from('call_logs')
     .insert({
@@ -107,8 +113,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       type: direction,
       duration_seconds: 0,
       recorded: false,
-      cost_coins: 0,
-      status: 'in-progress',
     })
     .select('id')
     .single();
@@ -119,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   res.status(200).json({
     callId: callLog?.id || null,
-    reservedCoins: reserveAmount,
-    status: 'reserved',
+    reservedCoins,
+    status: reservedCoins > 0 ? 'reserved' : 'pending',
   });
 }

@@ -159,32 +159,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await addMessage(record);
     console.log('Outbound SMS sent:', record);
 
-    // Charge coins for the SMS
-    const { error: chargeError } = await serverClient.rpc('charge_sms', {
-      p_user_id: userData.user.id,
-      p_coins: smsCost,
-      p_message_sid: message.id,
-      p_direction: 'outbound',
-      p_type: isMms ? 'mms' : 'sms',
-      p_segments: segments,
-    });
+    // Charge coins for the SMS — try charge_sms RPC first, fall back to debit_tokens
+    let charged = false;
+    try {
+      const { data: chargeResult, error: chargeError } = await serverClient.rpc('charge_sms', {
+        p_user_id: userData.user.id,
+        p_coins: smsCost,
+        p_message_sid: message.id,
+        p_direction: 'outbound',
+        p_type: isMms ? 'mms' : 'sms',
+        p_segments: segments,
+      });
 
-    if (chargeError) {
-      console.error('SMS charge error:', chargeError.message);
+      if (chargeError) {
+        console.warn('[Billing] charge_sms RPC failed, trying debit_tokens fallback:', chargeError.message);
+      } else if (chargeResult === true) {
+        charged = true;
+        console.log(`[Billing] Charged ${smsCost} coins for outbound SMS`);
+      }
+    } catch (chargeErr) {
+      console.warn('[Billing] charge_sms error, trying fallback:', chargeErr);
     }
 
-    // Log to messages_log
-    await serverClient.from('messages_log').insert({
-      user_id: userData.user.id,
-      message_sid: message.id,
-      direction: 'outbound',
-      type: isMms ? 'mms' : 'sms',
-      segments,
-      from_number: fromNumber,
-      to_number: to,
-      cost_coins: smsCost,
-      status: 'sent',
-    });
+    // Fallback: direct debit via debit_tokens + manual transaction log
+    if (!charged) {
+      try {
+        const { data: debitResult } = await serverClient.rpc('debit_tokens', {
+          p_user_id: userData.user.id,
+          p_tokens: smsCost,
+          p_reference: `SMS-${message.id}`,
+        });
+
+        if (debitResult === true) {
+          await serverClient.from('transactions').insert({
+            user_id: userData.user.id,
+            reference: `SMS-${message.id}`,
+            tokens: smsCost,
+            amount_minor: 0,
+            currency: 'COINS',
+            provider: 'billing',
+            status: 'success',
+            metadata: {
+              billing_type: 'sms',
+              billing_direction: 'debit',
+              message_sid: message.id,
+              direction: 'outbound',
+              type: isMms ? 'mms' : 'sms',
+              segments,
+              cost_coins: smsCost,
+            },
+          });
+          charged = true;
+          console.log(`[Billing] Fallback charged ${smsCost} coins for SMS`);
+        } else {
+          console.warn(`[Billing] SMS debit failed: insufficient balance (${smsCost} coins)`);
+        }
+      } catch (debitErr) {
+        console.error('[Billing] SMS fallback debit error:', debitErr);
+      }
+    }
+
+    // Try to log to messages_log (table may not exist yet)
+    try {
+      await serverClient.from('messages_log').insert({
+        user_id: userData.user.id,
+        message_sid: message.id,
+        direction: 'outbound',
+        type: isMms ? 'mms' : 'sms',
+        segments,
+        from_number: fromNumber,
+        to_number: to,
+        cost_coins: smsCost,
+        status: 'sent',
+      });
+    } catch (logErr) {
+      console.warn('[Billing] messages_log insert failed (table may not exist):', logErr);
+    }
 
     res.status(200).json({ sid: message.id, status: record.status, cost: smsCost });
   } catch (err) {

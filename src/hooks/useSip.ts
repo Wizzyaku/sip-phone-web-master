@@ -130,9 +130,8 @@ export function useSip() {
     }
   }, []);
 
-  const endCallBilling = useCallback(async (durationSeconds: number, direction: 'incoming' | 'outgoing') => {
+  const endCallBilling = useCallback(async (durationSeconds: number, direction: 'incoming' | 'outgoing', remoteIdentity: string) => {
     const billing = callBillingRef.current;
-    if (!billing.callId) return;
 
     try {
       const session = await supabase.auth.getSession();
@@ -151,6 +150,7 @@ export function useSip() {
           direction,
           reservedCoins: billing.reservedCoins,
           recorded: billing.isRecording,
+          remoteIdentity,
         }),
       });
 
@@ -239,7 +239,7 @@ export function useSip() {
         stopTimer();
         // End billing — capture duration before clearing activeCall
         const finalDuration = activeCallRef.current?.durationSeconds || 0;
-        endCallBilling(finalDuration, direction);
+        endCallBilling(finalDuration, direction, remoteIdentity);
         setActiveCall(null);
       }
     });

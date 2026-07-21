@@ -172,6 +172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const flag = flagForCountry(countryCode);
 
     // Step 3: Save the purchased number to Supabase for this user
+    // next_billing_date and billing_status are in the new schema but may not be applied yet
     const { error: insertError } = await serverClient
       .from('phone_numbers')
       .insert({
@@ -182,8 +183,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         monthly_cost: actualMonthlyCost,
         active: purchaseStatus === 'active',
         label: '',
-        next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        billing_status: 'active',
       });
 
     if (insertError) {
@@ -199,9 +198,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       currency: 'COINS',
       provider: 'balance',
       status: 'success',
-      billing_type: 'subscription',
-      billing_direction: 'debit',
       metadata: {
+        billing_type: 'subscription',
+        billing_direction: 'debit',
         type: 'number_purchase',
         phone_number: purchasedNumber,
         monthly_cost: actualMonthlyCost,
