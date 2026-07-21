@@ -12,7 +12,7 @@ export interface Balance {
   updatedAt: string;
 }
 
-export const LOW_BALANCE_THRESHOLD = 10;
+export const LOW_BALANCE_THRESHOLD = 20;
 
 export function hasEnoughBalance(balance: Balance | null): boolean {
   return !!balance && balance.tokens >= LOW_BALANCE_THRESHOLD;

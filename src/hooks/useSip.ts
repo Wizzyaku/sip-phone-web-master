@@ -10,6 +10,9 @@ import {
 } from 'sip.js';
 import type { UserAgentOptions } from 'sip.js';
 import { useAppStore, type SipSettings } from '../store/appStore';
+import { supabase } from '../lib/supabase';
+
+const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 // Telnyx/FreeSWITCH sometimes sends SDPs without `a=rtcp-mux`, but modern
 // browsers require it when the peer connection is in the default
@@ -61,11 +64,17 @@ export function useSip() {
   const pendingCallTargetRef = useRef<string | null>(null);
   const [status, setStatus] = useState<SipStatus>('idle');
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
+  const activeCallRef = useRef<ActiveCall | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sipSettings = useAppStore((s) => s.sipSettings);
 
   const timerRef = useRef<number | null>(null);
   const connectionTimeoutRef = useRef<number | null>(null);
+  const callBillingRef = useRef<{ callId: string | null; reservedCoins: number; isRecording: boolean }>({
+    callId: null,
+    reservedCoins: 0,
+    isRecording: false,
+  });
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -73,6 +82,11 @@ export function useSip() {
       timerRef.current = null;
     }
   }, []);
+
+  // Keep activeCallRef in sync so we can read duration at termination time
+  useEffect(() => {
+    activeCallRef.current = activeCall;
+  }, [activeCall]);
 
   const startTimer = useCallback(() => {
     stopTimer();
@@ -84,6 +98,74 @@ export function useSip() {
       );
     }, 1000);
   }, [stopTimer]);
+
+  const startCallBilling = useCallback(async (direction: 'incoming' | 'outgoing', remoteIdentity: string) => {
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/call-start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ direction, remoteIdentity }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        callBillingRef.current = {
+          callId: data.callId,
+          reservedCoins: data.reservedCoins || 0,
+          isRecording: false,
+        };
+        console.log('[Billing] Call started, reserved', data.reservedCoins, 'coins, callId:', data.callId);
+      } else {
+        console.error('[Billing] Failed to start call billing:', await res.text());
+      }
+    } catch (err) {
+      console.error('[Billing] Call start billing error:', err);
+    }
+  }, []);
+
+  const endCallBilling = useCallback(async (durationSeconds: number, direction: 'incoming' | 'outgoing') => {
+    const billing = callBillingRef.current;
+    if (!billing.callId) return;
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) return;
+
+      const res = await fetch(`${API_URL}/call-end`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          callId: billing.callId,
+          durationSeconds,
+          direction,
+          reservedCoins: billing.reservedCoins,
+          recorded: billing.isRecording,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log('[Billing] Call ended, cost:', data.totalCost, 'coins, refund:', data.refundCoins);
+      } else {
+        console.error('[Billing] Failed to end call billing:', await res.text());
+      }
+    } catch (err) {
+      console.error('[Billing] Call end billing error:', err);
+    }
+
+    callBillingRef.current = { callId: null, reservedCoins: 0, isRecording: false };
+  }, []);
 
   const handleSession = useCallback((session: Session, direction: 'incoming' | 'outgoing') => {
     const remoteIdentity = session.remoteIdentity?.uri?.toString?.() || 'Unknown';
@@ -150,15 +232,20 @@ export function useSip() {
           startTimer();
           return updated;
         });
+        // Start billing when call is established
+        startCallBilling(direction, remoteIdentity);
       } else if (newState === SessionState.Terminated) {
         clearConnectionTimeout();
         stopTimer();
+        // End billing — capture duration before clearing activeCall
+        const finalDuration = activeCallRef.current?.durationSeconds || 0;
+        endCallBilling(finalDuration, direction);
         setActiveCall(null);
       }
     });
 
     updateRemoteStream();
-  }, [startTimer, stopTimer]);
+  }, [startTimer, stopTimer, startCallBilling, endCallBilling]);
 
   const callInternal = useCallback(
     async (target: string) => {

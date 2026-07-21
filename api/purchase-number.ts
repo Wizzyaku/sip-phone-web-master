@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabaseServer } from '../lib/supabase-server.js';
+import { NUMBER_SUBSCRIPTION_COINS } from '../lib/billing.js';
 
 export const config = {
   api: {
@@ -85,9 +86,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Calculate total cost in tokens (1000 tokens = $1)
-  const totalCostUSD = upfrontCost + monthlyCost;
-  const totalTokensNeeded = Math.ceil(totalCostUSD * TOKENS_PER_USD);
+  // Calculate cost: flat 5000 coins subscription for 30 days
+  const totalTokensNeeded = NUMBER_SUBSCRIPTION_COINS;
 
   // Step 1: Check and debit user's token balance
   const { data: debitResult, error: debitError } = await serverClient.rpc('debit_tokens', {
@@ -104,9 +104,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (debitResult !== true) {
     res.status(402).json({
-      error: `Insufficient token balance. You need ${totalTokensNeeded} tokens (≈$${totalCostUSD.toFixed(2)}) to purchase this number.`,
+      error: `Insufficient token balance. You need ${totalTokensNeeded} coins to purchase this number.`,
       tokensNeeded: totalTokensNeeded,
-      costUSD: totalCostUSD,
     });
     return;
   }
@@ -183,6 +182,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         monthly_cost: actualMonthlyCost,
         active: purchaseStatus === 'active',
         label: '',
+        next_billing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        billing_status: 'active',
       });
 
     if (insertError) {
@@ -195,14 +196,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reference: `NUM-${phoneNumber}-${Date.now()}`,
       tokens: -totalTokensNeeded,
       amount_minor: 0,
-      currency: 'TOKENS',
+      currency: 'COINS',
       provider: 'balance',
       status: 'success',
+      billing_type: 'subscription',
+      billing_direction: 'debit',
       metadata: {
         type: 'number_purchase',
         phone_number: purchasedNumber,
-        upfront_cost: upfrontCost,
         monthly_cost: actualMonthlyCost,
+        subscription_coins: totalTokensNeeded,
       },
     });
 

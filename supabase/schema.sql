@@ -122,6 +122,7 @@ $$ language plpgsql security definer;
 create table if not exists public.user_balances (
   id uuid references auth.users(id) on delete cascade primary key,
   tokens bigint not null default 0,
+  locked_balance bigint not null default 0,
   updated_at timestamp with time zone default now()
 );
 
@@ -258,6 +259,8 @@ create table if not exists public.phone_numbers (
   forwarding text,
   voicemail boolean default false,
   monthly_cost numeric default 7.0,
+  next_billing_date timestamp with time zone default (now() + interval '30 days'),
+  billing_status text default 'active',
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
@@ -349,6 +352,8 @@ create table if not exists public.call_logs (
   type text not null default 'outgoing',
   duration_seconds integer not null default 0,
   recorded boolean default false,
+  cost_coins bigint default 0,
+  status text default 'completed',
   created_at timestamp with time zone default now()
 );
 
@@ -368,3 +373,313 @@ drop policy if exists "Users can delete own call_logs" on public.call_logs;
 create policy "Users can delete own call_logs"
   on public.call_logs for delete
   using (auth.uid() = user_id);
+
+-- ------------------------------------------------------------
+-- 9. Messages log (SMS/MMS billing)
+--    Records every SMS/MMS sent or received with billing info.
+-- ------------------------------------------------------------
+create table if not exists public.messages_log (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  message_sid text,
+  direction text not null default 'outbound',
+  type text not null default 'sms',
+  segments integer default 1,
+  from_number text,
+  to_number text,
+  cost_coins bigint default 0,
+  status text default 'sent',
+  created_at timestamp with time zone default now()
+);
+
+alter table public.messages_log enable row level security;
+
+drop policy if exists "Users can read own messages_log" on public.messages_log;
+create policy "Users can read own messages_log"
+  on public.messages_log for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own messages_log" on public.messages_log;
+create policy "Users can insert own messages_log"
+  on public.messages_log for insert
+  with check (auth.uid() = user_id);
+
+-- ------------------------------------------------------------
+-- 10. Billing extensions to transactions table
+--     Add type and direction columns for billing ledger.
+-- ------------------------------------------------------------
+-- Add billing type column (call, sms, subscription, feature, topup, refund)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'transactions' and column_name = 'billing_type') then
+    alter table public.transactions add column billing_type text default 'topup';
+  end if;
+end $$;
+
+-- Add billing direction column (debit/credit)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name = 'transactions' and column_name = 'billing_direction') then
+    alter table public.transactions add column billing_direction text default 'credit';
+  end if;
+end $$;
+
+-- ============================================================
+-- BILLING RPC FUNCTIONS
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- reserve_coins: Lock coins for an active call
+-- Moves coins from tokens to locked_balance atomically
+-- ------------------------------------------------------------
+create or replace function public.reserve_coins(p_user_id uuid, p_coins bigint)
+returns boolean as $$
+declare
+  current_tokens bigint;
+  current_locked bigint;
+begin
+  select tokens, locked_balance into current_tokens, current_locked
+  from public.user_balances where id = p_user_id for update;
+
+  if current_tokens is null or current_tokens < p_coins then
+    return false;
+  end if;
+
+  update public.user_balances
+  set tokens = current_tokens - p_coins,
+      locked_balance = current_locked + p_coins
+  where id = p_user_id;
+
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- ------------------------------------------------------------
+-- settle_call: Deduct exact call cost from locked balance, refund remainder
+-- p_locked_amount = what was reserved, p_actual_cost = real cost
+-- ------------------------------------------------------------
+create or replace function public.settle_call(
+  p_user_id uuid,
+  p_locked_amount bigint,
+  p_actual_cost bigint,
+  p_call_id uuid,
+  p_direction text,
+  p_duration_seconds integer
+)
+returns bigint as $$
+declare
+  current_tokens bigint;
+  current_locked bigint;
+  refund_amount bigint;
+begin
+  select tokens, locked_balance into current_tokens, current_locked
+  from public.user_balances where id = p_user_id for update;
+
+  -- Refund = locked - actual cost (could be 0 if cost >= locked)
+  refund_amount := greatest(p_locked_amount - p_actual_cost, 0);
+
+  -- Ensure locked doesn't go negative
+  if current_locked < p_locked_amount then
+    -- locked was already partially consumed, just deduct what we can
+    refund_amount := greatest(current_locked - p_actual_cost, 0);
+  end if;
+
+  update public.user_balances
+  set tokens = current_tokens + refund_amount,
+      locked_balance = greatest(current_locked - p_locked_amount, 0)
+  where id = p_user_id;
+
+  -- Log the transaction
+  insert into public.transactions (
+    user_id, reference, tokens, amount_minor, currency, provider,
+    status, billing_type, billing_direction, metadata
+  ) values (
+    p_user_id,
+    'CALL-' || p_call_id,
+    p_actual_cost,
+    0,
+    'COINS',
+    'billing',
+    'success',
+    'call',
+    'debit',
+    jsonb_build_object(
+      'call_id', p_call_id,
+      'direction', p_direction,
+      'duration_seconds', p_duration_seconds,
+      'cost_coins', p_actual_cost,
+      'locked_coins', p_locked_amount,
+      'refund_coins', refund_amount
+    )
+  );
+
+  return refund_amount;
+end;
+$$ language plpgsql security definer;
+
+-- ------------------------------------------------------------
+-- charge_sms: Deduct coins for SMS/MMS
+-- ------------------------------------------------------------
+create or replace function public.charge_sms(
+  p_user_id uuid,
+  p_coins bigint,
+  p_message_sid text,
+  p_direction text,
+  p_type text,
+  p_segments integer
+)
+returns boolean as $$
+declare
+  current_tokens bigint;
+begin
+  select tokens into current_tokens
+  from public.user_balances where id = p_user_id for update;
+
+  if current_tokens is null or current_tokens < p_coins then
+    return false;
+  end if;
+
+  update public.user_balances
+  set tokens = current_tokens - p_coins
+  where id = p_user_id;
+
+  -- Log the transaction
+  insert into public.transactions (
+    user_id, reference, tokens, amount_minor, currency, provider,
+    status, billing_type, billing_direction, metadata
+  ) values (
+    p_user_id,
+    'SMS-' || p_message_sid,
+    p_coins,
+    0,
+    'COINS',
+    'billing',
+    'success',
+    'sms',
+    'debit',
+    jsonb_build_object(
+      'message_sid', p_message_sid,
+      'direction', p_direction,
+      'type', p_type,
+      'segments', p_segments,
+      'cost_coins', p_coins
+    )
+  );
+
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- ------------------------------------------------------------
+-- charge_subscription: Deduct monthly number subscription (5000 coins)
+-- ------------------------------------------------------------
+create or replace function public.charge_subscription(
+  p_user_id uuid,
+  p_coins bigint,
+  p_phone_number text
+)
+returns boolean as $$
+declare
+  current_tokens bigint;
+begin
+  select tokens into current_tokens
+  from public.user_balances where id = p_user_id for update;
+
+  if current_tokens is null or current_tokens < p_coins then
+    return false;
+  end if;
+
+  update public.user_balances
+  set tokens = current_tokens - p_coins
+  where id = p_user_id;
+
+  -- Extend billing date by 30 days
+  update public.phone_numbers
+  set next_billing_date = now() + interval '30 days',
+      billing_status = 'active',
+      active = true
+  where user_id = p_user_id and number = p_phone_number;
+
+  -- Log the transaction
+  insert into public.transactions (
+    user_id, reference, tokens, amount_minor, currency, provider,
+    status, billing_type, billing_direction, metadata
+  ) values (
+    p_user_id,
+    'SUB-' || p_phone_number || '-' || extract(epoch from now())::bigint,
+    p_coins,
+    0,
+    'COINS',
+    'billing',
+    'success',
+    'subscription',
+    'debit',
+    jsonb_build_object(
+      'phone_number', p_phone_number,
+      'cost_coins', p_coins
+    )
+  );
+
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- ------------------------------------------------------------
+-- charge_feature: Deduct coins for features (recording, AI, conference)
+-- ------------------------------------------------------------
+create or replace function public.charge_feature(
+  p_user_id uuid,
+  p_coins bigint,
+  p_feature_type text,
+  p_metadata jsonb default null
+)
+returns boolean as $$
+declare
+  current_tokens bigint;
+begin
+  select tokens into current_tokens
+  from public.user_balances where id = p_user_id for update;
+
+  if current_tokens is null or current_tokens < p_coins then
+    return false;
+  end if;
+
+  update public.user_balances
+  set tokens = current_tokens - p_coins
+  where id = p_user_id;
+
+  insert into public.transactions (
+    user_id, reference, tokens, amount_minor, currency, provider,
+    status, billing_type, billing_direction, metadata
+  ) values (
+    p_user_id,
+    'FEAT-' || p_feature_type || '-' || extract(epoch from now())::bigint,
+    p_coins,
+    0,
+    'COINS',
+    'billing',
+    'success',
+    'feature',
+    'debit',
+    jsonb_build_object(
+      'feature_type', p_feature_type,
+      'cost_coins', p_coins
+    ) || coalesce(p_metadata, '{}'::jsonb)
+  );
+
+  return true;
+end;
+$$ language plpgsql security definer;
+
+-- ------------------------------------------------------------
+-- get_wallet: Return balance and locked amount
+-- ------------------------------------------------------------
+create or replace function public.get_wallet(p_user_id uuid)
+returns table(tokens bigint, locked_balance bigint) as $$
+begin
+  return query
+    select b.tokens, b.locked_balance
+    from public.user_balances b
+    where b.id = p_user_id;
+end;
+$$ language plpgsql security definer;

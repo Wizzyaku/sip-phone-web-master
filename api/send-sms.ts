@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { addMessage } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
+import {
+  SMS_COINS_PER_SEGMENT,
+  MMS_COINS_PER_MESSAGE,
+  estimateSmsSegments,
+} from '../lib/billing.js';
 
 export const config = {
   api: {
@@ -9,7 +14,6 @@ export const config = {
 };
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
-const LOW_BALANCE_THRESHOLD = 10;
 
 function normalizePhone(number: string): string {
   const digits = number.replace(/\D/g, '');
@@ -70,11 +74,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .eq('id', userData.user.id)
     .maybeSingle();
 
-  if (balanceError || !balanceData || Number(balanceData.tokens) < LOW_BALANCE_THRESHOLD) {
-    res.status(402).json({ error: 'Insufficient balance. Please top up your account.' });
-    return;
-  }
-
   const to = body.to as string | undefined;
   const messageBody = body.body as string | undefined;
   const rawFrom = body.from as string | undefined;
@@ -87,6 +86,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!rawFrom) {
     res.status(400).json({ error: 'Missing "from" number.' });
+    return;
+  }
+
+  // Check balance and calculate SMS cost
+  const segments = estimateSmsSegments(messageBody);
+  const isMms = Boolean(body.mediaUrl);
+  const smsCost = isMms
+    ? MMS_COINS_PER_MESSAGE * segments
+    : SMS_COINS_PER_SEGMENT * segments;
+
+  if (!balanceData || Number(balanceData.tokens) < smsCost) {
+    res.status(402).json({
+      error: `Insufficient balance. You need ${smsCost} coins to send this message.`,
+      required: smsCost,
+    });
     return;
   }
 
@@ -145,7 +159,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await addMessage(record);
     console.log('Outbound SMS sent:', record);
 
-    res.status(200).json({ sid: message.id, status: record.status });
+    // Charge coins for the SMS
+    const { error: chargeError } = await serverClient.rpc('charge_sms', {
+      p_user_id: userData.user.id,
+      p_coins: smsCost,
+      p_message_sid: message.id,
+      p_direction: 'outbound',
+      p_type: isMms ? 'mms' : 'sms',
+      p_segments: segments,
+    });
+
+    if (chargeError) {
+      console.error('SMS charge error:', chargeError.message);
+    }
+
+    // Log to messages_log
+    await serverClient.from('messages_log').insert({
+      user_id: userData.user.id,
+      message_sid: message.id,
+      direction: 'outbound',
+      type: isMms ? 'mms' : 'sms',
+      segments,
+      from_number: fromNumber,
+      to_number: to,
+      cost_coins: smsCost,
+      status: 'sent',
+    });
+
+    res.status(200).json({ sid: message.id, status: record.status, cost: smsCost });
   } catch (err) {
     const error = err as Error;
     console.error(error);
