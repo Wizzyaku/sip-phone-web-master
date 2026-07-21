@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { addMessage } from '../lib/message-store.js';
+import { supabaseServer } from '../lib/supabase-server.js';
 
 export const config = {
   api: {
@@ -78,6 +79,38 @@ async function sendTelegramMessage(chatId: string | number, text: string) {
   }
 }
 
+async function verifyTelegramCode(chatId: number, text: string): Promise<boolean> {
+  const codeMatch = text.match(/(?:\/start\s+)?(LINK-[A-Z0-9]{4}-[A-Z0-9]{4})/);
+  const code = codeMatch?.[1];
+  if (!code) return false;
+
+  const serverClient = supabaseServer();
+  const { data: profile } = await serverClient
+    .from('profiles')
+    .select('id, name')
+    .eq('telegram_code', code)
+    .gt('telegram_code_expires_at', new Date().toISOString())
+    .maybeSingle();
+
+  if (!profile) {
+    await sendTelegramMessage(chatId, '❌ Invalid or expired code. Please generate a new one in your Phonicity settings.');
+    return true;
+  }
+
+  await serverClient
+    .from('profiles')
+    .update({
+      telegram_chat_id: String(chatId),
+      telegram_enabled: true,
+      telegram_code: null,
+      telegram_code_expires_at: null,
+    })
+    .eq('id', profile.id);
+
+  await sendTelegramMessage(chatId, `✅ *Telegram linked!*\n\nHello${profile.name ? ` ${profile.name}` : ''}, you'll now receive notifications here when enabled.`);
+  return true;
+}
+
 async function sendSmsViaTelnyx(from: string, to: string, text: string) {
   const response = await fetch('https://api.telnyx.com/v2/messages', {
     method: 'POST',
@@ -152,6 +185,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log('Telnyx API key status:', { hasKey: !!TELNYX_API_KEY, keyPrefix: TELNYX_API_KEY ? TELNYX_API_KEY.slice(0, 6) + '...' : 'MISSING' });
 
   try {
+    // Case 0: Link Telegram account via code
+    if (await verifyTelegramCode(chatId, text)) {
+      res.status(200).json({ ok: true });
+      return;
+    }
+
     // Case 1: Reply to a forwarded SMS message
     const replyTo = message.reply_to_message as Record<string, unknown> | undefined;
     if (replyTo && replyTo.text) {

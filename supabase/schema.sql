@@ -23,6 +23,10 @@ create table if not exists public.profiles (
   bio text,
   avatar text,
   phone_number text,
+  telegram_chat_id text,
+  telegram_enabled boolean default false,
+  telegram_code text,
+  telegram_code_expires_at timestamp with time zone,
   updated_at timestamp with time zone default now()
 );
 

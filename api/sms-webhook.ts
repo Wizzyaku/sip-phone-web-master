@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { addMessage } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
 import { SMS_COINS_PER_SEGMENT, estimateSmsSegments } from '../lib/billing.js';
+import { notifyTelegramByPhone } from '../lib/telegram.js';
 
 export const config = {
   api: {
@@ -52,7 +53,7 @@ function parseJsonBody(req: VercelRequest): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
-async function sendToTelegram(text: string, chatId: string) {
+async function sendToTelegram(text: string, chatId: string | undefined) {
   if (!TELEGRAM_BOT_TOKEN || !chatId) {
     console.warn('Telegram env vars missing:', {
       hasToken: !!TELEGRAM_BOT_TOKEN,
@@ -227,6 +228,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await sendToTelegram(
           `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`,
           chatId
+        );
+
+        await notifyTelegramByPhone(
+          to,
+          `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`
         );
       }
     }

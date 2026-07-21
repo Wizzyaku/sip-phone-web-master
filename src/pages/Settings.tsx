@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User,
@@ -21,6 +21,8 @@ import {
   Phone,
   ChevronRight,
   Mail,
+  MessageCircle,
+  Send,
   HelpCircle,
   FileText,
 } from 'lucide-react';
@@ -74,6 +76,13 @@ export function Settings() {
   const [copied, setCopied] = useState(false);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(false);
+  const [telegram, setTelegram] = useState({
+    linked: false,
+    enabled: false,
+    linkUrl: '',
+    loading: true,
+    generating: false,
+  });
   const [signOutModal, setSignOutModal] = useState(false);
   const [helpCenterModal, setHelpCenterModal] = useState(false);
   const [termsPrivacyModal, setTermsPrivacyModal] = useState(false);
@@ -135,6 +144,71 @@ export function Settings() {
     setVerifyStatus({ type: 'success', message: 'Sender number saved.' });
     window.setTimeout(() => setVerifyStatus(null), 3000);
   };
+
+  const getUserId = async (): Promise<string | null> => {
+    const { data } = await supabase.auth.getUser();
+    return data?.user?.id ?? null;
+  };
+
+  const fetchTelegramStatus = async () => {
+    try {
+      const userId = await getUserId();
+      if (!userId) {
+        setTelegram((t) => ({ ...t, loading: false }));
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('telegram_chat_id, telegram_enabled')
+        .eq('id', userId)
+        .maybeSingle();
+      setTelegram((t) => ({
+        ...t,
+        linked: !!profile?.telegram_chat_id,
+        enabled: !!profile?.telegram_enabled,
+        loading: false,
+      }));
+    } catch {
+      setTelegram((t) => ({ ...t, loading: false }));
+    }
+  };
+
+  const handleGenerateTelegramCode = async () => {
+    try {
+      setTelegram((t) => ({ ...t, generating: true }));
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) return;
+      const res = await axios.post(`${API_URL}/generate-telegram-code`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.link) {
+        setTelegram((t) => ({ ...t, linkUrl: res.data.link }));
+        window.open(res.data.link, '_blank');
+      }
+    } catch (err) {
+      console.error('Failed to generate Telegram code:', err);
+    } finally {
+      setTelegram((t) => ({ ...t, generating: false }));
+    }
+  };
+
+  const handleToggleTelegram = async () => {
+    const next = !telegram.enabled;
+    setTelegram((t) => ({ ...t, enabled: next }));
+    try {
+      const userId = await getUserId();
+      if (!userId) return;
+      await supabase.from('profiles').update({ telegram_enabled: next }).eq('id', userId);
+    } catch (err) {
+      console.error('Failed to toggle Telegram:', err);
+      setTelegram((t) => ({ ...t, enabled: !next }));
+    }
+  };
+
+  useEffect(() => {
+    fetchTelegramStatus();
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -382,6 +456,52 @@ export function Settings() {
                     <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Telegram */}
+            <div className="animate-fade-in animate-delay-200 shrink-0 flex flex-col gap-2">
+              <h3 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest px-2">Telegram</h3>
+              <div className="bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] flex flex-col gap-3 p-4 dark:bg-slate-900 dark:border-slate-700/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-[10px] bg-sky-50 flex items-center justify-center text-sky-500 dark:bg-sky-900/20 dark:text-sky-400">
+                    <MessageCircle className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col flex-grow">
+                    <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Telegram</span>
+                    <span className="text-[9px] font-medium text-slate-500 dark:text-slate-400">
+                      {telegram.loading ? 'Loading...' : telegram.linked ? 'Linked' : 'Not linked'}
+                    </span>
+                  </div>
+                </div>
+                {telegram.loading ? null : telegram.linked ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Notifications</span>
+                    <button
+                      onClick={handleToggleTelegram}
+                      className={cn(
+                        'relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
+                        telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
+                          telegram.enabled ? 'translate-x-4 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                        )}
+                      />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleGenerateTelegramCode}
+                    disabled={telegram.generating}
+                    className="h-9 px-3 bg-indigo-600 text-white rounded-[10px] text-[11px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {telegram.generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    Send code to Telegram
+                  </button>
+                )}
               </div>
             </div>
 
@@ -751,6 +871,52 @@ export function Settings() {
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Clear All Notifications
                     </button>
+                  </div>
+                </div>
+
+                {/* Telegram */}
+                <div className="bg-white border border-slate-200/80 rounded-[24px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-5 dark:bg-slate-900 dark:border-slate-700/50">
+                  <h3 className="text-[16px] font-bold text-slate-800 tracking-tight mb-4 dark:text-slate-100">Telegram</h3>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-[10px] bg-sky-50 flex items-center justify-center text-sky-500 dark:bg-sky-900/20 dark:text-sky-400">
+                        <MessageCircle className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Telegram</span>
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          {telegram.loading ? 'Loading...' : telegram.linked ? 'Linked' : 'Not linked'}
+                        </span>
+                      </div>
+                    </div>
+                    {telegram.loading ? null : telegram.linked ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">Telegram Notifications</span>
+                        <button
+                          onClick={handleToggleTelegram}
+                          className={cn(
+                            'relative inline-block w-11 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
+                            telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
+                              telegram.enabled ? 'translate-x-5 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                            )}
+                          />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleGenerateTelegramCode}
+                        disabled={telegram.generating}
+                        className="h-10 px-4 bg-indigo-600 text-white rounded-[12px] text-[13px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {telegram.generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        Send code to Telegram
+                      </button>
+                    )}
                   </div>
                 </div>
 
