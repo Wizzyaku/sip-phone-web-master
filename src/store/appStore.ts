@@ -7,6 +7,7 @@ export interface User {
   email: string;
   avatar: string;
   bio?: string;
+  isAdmin?: boolean;
 }
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error' | 'call' | 'message';

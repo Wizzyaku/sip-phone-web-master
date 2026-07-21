@@ -9,6 +9,8 @@ import { initTheme, useAppStore } from './store/appStore';
 import { useNotifications } from './hooks/useNotifications';
 import { useBalance } from './hooks/useBalance';
 import { AuthRequired } from './components/AuthRoute';
+import { AdminRequired } from './components/AdminRoute';
+import { AdminLayout } from './layout/AdminLayout';
 import { AuthModal } from './components/AuthModal';
 import { ScrollToTop } from './components/ScrollToTop';
 import { supabase } from './lib/supabase';
@@ -24,6 +26,7 @@ const PhoneNumbers = lazy(() => import('./pages/PhoneNumbers'));
 const Billing = lazy(() => import('./pages/Billing'));
 const Usage = lazy(() => import('./pages/Usage'));
 const Settings = lazy(() => import('./pages/Settings'));
+const AdminOverview = lazy(() => import('./pages/admin/AdminOverview'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const pageFallback = (
@@ -51,6 +54,7 @@ function AppProviders() {
           email: profile.email,
           avatar: profile.avatar,
           bio: profile.bio,
+          isAdmin: profile.isAdmin,
         });
         setTelnyxNumber(profile.phoneNumber);
       }
@@ -125,6 +129,20 @@ const router = createBrowserRouter([
           { path: 'billing', element: <Billing /> },
           { path: 'usage', element: <Usage /> },
           { path: 'settings', element: <Settings /> },
+          { path: '*', element: <NotFound /> },
+        ],
+      },
+    ],
+  },
+  {
+    path: 'admin',
+    element: <AdminRequired />,
+    errorElement: <RouteError />,
+    children: [
+      {
+        element: <AdminLayout />,
+        children: [
+          { index: true, element: <AdminOverview /> },
           { path: '*', element: <NotFound /> },
         ],
       },

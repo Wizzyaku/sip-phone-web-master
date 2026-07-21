@@ -7,6 +7,8 @@ export interface ProfileData {
   bio: string;
   avatar: string;
   phoneNumber: string | null;
+  role: string | null;
+  isAdmin: boolean;
 }
 
 export async function fetchProfile(): Promise<ProfileData | null> {
@@ -16,7 +18,7 @@ export async function fetchProfile(): Promise<ProfileData | null> {
 
   const { data, error } = await supabase
     .from('profiles')
-    .select('name, bio, avatar, phone_number')
+    .select('name, bio, avatar, phone_number, role')
     .eq('id', session.user.id)
     .maybeSingle();
 
@@ -33,6 +35,8 @@ export async function fetchProfile(): Promise<ProfileData | null> {
     bio: data.bio || '',
     avatar: data.avatar || '',
     phoneNumber: data.phone_number || null,
+    role: data.role || 'user',
+    isAdmin: data.role === 'admin',
   };
 }
 
