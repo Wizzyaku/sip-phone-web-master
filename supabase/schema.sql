@@ -690,6 +690,12 @@ end;
 $$ language plpgsql security definer;
 
 -- ------------------------------------------------------------
+-- Ensure profiles has the admin role column (idempotent for existing DBs)
+-- ------------------------------------------------------------
+alter table public.profiles
+  add column if not exists role text default 'user' check (role is null or role in ('user', 'admin'));
+
+-- ------------------------------------------------------------
 -- admin_logs: Audit trail for administrative actions
 -- ------------------------------------------------------------
 create table if not exists public.admin_logs (
