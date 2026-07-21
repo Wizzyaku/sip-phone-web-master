@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useMemo, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Phone,
   PhoneIncoming,
@@ -19,6 +20,7 @@ import {
   Disc,
   Eye,
   EyeOff,
+  MessageSquare,
 } from 'lucide-react';
 import { Skeleton } from '../components/ui/skeleton';
 import { useSipContext } from '../context/SipContext';
@@ -103,6 +105,8 @@ export function Calls() {
   const [dialerOpen, setDialerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
+  const [expandedCallId, setExpandedCallId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -236,6 +240,22 @@ export function Calls() {
     setDialerOpen(false);
   };
 
+  const handleCallBack = (phone: string) => {
+    if (!phone) return;
+    const balance = useAppStore.getState().balance;
+    if (!hasEnoughBalance(balance)) {
+      setLowBalanceOpen(true);
+      return;
+    }
+    call(phone);
+    setExpandedCallId(null);
+  };
+
+  const handleMessage = (phone: string) => {
+    navigate(`/messages?to=${encodeURIComponent(phone)}`);
+    setExpandedCallId(null);
+  };
+
   const activeLine = telnyxNumber || settings.phoneNumber || 'No number assigned';
 
   const tabs: { id: RecentFilter; label: string }[] = [
@@ -328,32 +348,56 @@ export function Calls() {
                   return (
                     <div
                       key={callItem.id}
-                      className="bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-3.5 flex items-center justify-between active:bg-slate-50 transition-colors dark:bg-slate-900 dark:border-slate-700/50 dark:active:bg-slate-800"
+                      className="bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] overflow-hidden transition-all dark:bg-slate-900 dark:border-slate-700/50"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', cfg.bg)}>
-                          <Icon className={cn('w-[18px] h-[18px]', cfg.color)} />
+                      <div
+                        className="p-3.5 flex items-center justify-between active:bg-slate-50 transition-colors cursor-pointer dark:active:bg-slate-800"
+                        onClick={() => setExpandedCallId(expandedCallId === callItem.id ? null : callItem.id)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', cfg.bg)}>
+                            <Icon className={cn('w-[18px] h-[18px]', cfg.color)} />
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <h4 className={cn('text-[14px] font-extrabold truncate', cfg.nameColor, 'dark:text-slate-100')}>{callItem.name}</h4>
+                            <span className="text-[11px] font-semibold text-slate-500 truncate mt-0.5">{subLabel}</span>
+                          </div>
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <h4 className={cn('text-[14px] font-extrabold truncate', cfg.nameColor, 'dark:text-slate-100')}>{callItem.name}</h4>
-                          <span className="text-[11px] font-semibold text-slate-500 truncate mt-0.5">{subLabel}</span>
+                        <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
+                          <span className="text-[10px] font-extrabold text-slate-400">{callItem.time}</span>
+                          {callItem.type === 'voicemail' ? (
+                            <button className="w-7 h-7 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 flex items-center justify-center transition-colors active:scale-95 shadow-sm">
+                              <Play className="w-3.5 h-3.5" fill="currentColor" />
+                            </button>
+                          ) : (
+                            <button
+                              className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors active:scale-95"
+                              onClick={(e) => { e.stopPropagation(); setNumber(callItem.phone); setDialerOpen(true); }}
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1.5 shrink-0 ml-2">
-                        <span className="text-[10px] font-extrabold text-slate-400">{callItem.time}</span>
-                        {callItem.type === 'voicemail' ? (
-                          <button className="w-7 h-7 rounded-full bg-indigo-600 text-white hover:bg-indigo-500 flex items-center justify-center transition-colors active:scale-95 shadow-sm">
-                            <Play className="w-3.5 h-3.5" fill="currentColor" />
-                          </button>
-                        ) : (
+                      {expandedCallId === callItem.id && (
+                        <div className="px-3.5 pb-3.5 pt-1 flex gap-2.5 animate-fade-in">
                           <button
-                            className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors active:scale-95"
-                            onClick={() => { setNumber(callItem.phone); setDialerOpen(true); }}
+                            onClick={() => handleCallBack(callItem.phone)}
+                            disabled={!!activeCall}
+                            className="flex-1 h-10 rounded-[12px] bg-emerald-500 text-white font-bold text-[12px] flex items-center justify-center gap-1.5 active:scale-95 transition-transform disabled:opacity-50"
                           >
-                            <Info className="w-3.5 h-3.5" />
+                            <Phone className="w-4 h-4" />
+                            Call Back
                           </button>
-                        )}
-                      </div>
+                          <button
+                            onClick={() => handleMessage(callItem.phone)}
+                            className="flex-1 h-10 rounded-[12px] bg-indigo-50 text-indigo-600 font-bold text-[12px] flex items-center justify-center gap-1.5 active:scale-95 transition-transform dark:bg-indigo-900/30 dark:text-indigo-400"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            Message
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -606,33 +650,57 @@ export function Calls() {
                       return (
                         <div
                           key={callItem.id}
-                          className="group flex cursor-pointer items-center gap-4 rounded-2xl border border-slate-100 p-4 transition-all hover:bg-slate-50 hover:shadow-sm dark:border-slate-700 dark:hover:bg-slate-800"
+                          className="group rounded-2xl border border-slate-100 transition-all hover:bg-slate-50 hover:shadow-sm overflow-hidden dark:border-slate-700 dark:hover:bg-slate-800"
                         >
-                          <div className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-full', cfg.bg)}>
-                            <Icon className={cn('h-5 w-5', cfg.color)} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className={cn('truncate font-extrabold', cfg.nameColor, 'dark:text-slate-100')}>{callItem.name}</h4>
-                            <p className="text-xs font-medium text-slate-500">{callItem.phone} • {callItem.duration}</p>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="text-xs text-slate-400 font-bold">{callItem.time}</span>
-                            <div className="flex gap-1.5">
-                              {callItem.recorded && (
-                                <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 transition-colors hover:bg-indigo-100" title="Playback">
-                                  <Play className="h-4 w-4" />
+                          <div
+                            className="flex cursor-pointer items-center gap-4 p-4"
+                            onClick={() => setExpandedCallId(expandedCallId === callItem.id ? null : callItem.id)}
+                          >
+                            <div className={cn('flex h-12 w-12 shrink-0 items-center justify-center rounded-full', cfg.bg)}>
+                              <Icon className={cn('h-5 w-5', cfg.color)} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className={cn('truncate font-extrabold', cfg.nameColor, 'dark:text-slate-100')}>{callItem.name}</h4>
+                              <p className="text-xs font-medium text-slate-500">{callItem.phone} • {callItem.duration}</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="text-xs text-slate-400 font-bold">{callItem.time}</span>
+                              <div className="flex gap-1.5">
+                                {callItem.recorded && (
+                                  <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 transition-colors hover:bg-indigo-100" title="Playback">
+                                    <Play className="h-4 w-4" />
+                                  </button>
+                                )}
+                                {callItem.type === 'voicemail' && (
+                                  <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white transition-colors hover:bg-indigo-500 shadow-sm" title="Play Voicemail">
+                                    <Play className="h-4 w-4" fill="currentColor" />
+                                  </button>
+                                )}
+                                <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                                  <Info className="h-4 w-4" />
                                 </button>
-                              )}
-                              {callItem.type === 'voicemail' && (
-                                <button className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white transition-colors hover:bg-indigo-500 shadow-sm" title="Play Voicemail">
-                                  <Play className="h-4 w-4" fill="currentColor" />
-                                </button>
-                              )}
-                              <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
-                                <Info className="h-4 w-4" />
-                              </button>
+                              </div>
                             </div>
                           </div>
+                          {expandedCallId === callItem.id && (
+                            <div className="px-4 pb-4 pt-1 flex gap-3 animate-fade-in">
+                              <button
+                                onClick={() => handleCallBack(callItem.phone)}
+                                disabled={!!activeCall}
+                                className="flex-1 h-10 rounded-xl bg-emerald-500 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-400 active:scale-95 transition-all disabled:opacity-50"
+                              >
+                                <Phone className="w-4 h-4" />
+                                Call Back
+                              </button>
+                              <button
+                                onClick={() => handleMessage(callItem.phone)}
+                                className="flex-1 h-10 rounded-xl bg-indigo-50 text-indigo-600 font-bold text-sm flex items-center justify-center gap-2 hover:bg-indigo-100 active:scale-95 transition-all dark:bg-indigo-900/30 dark:text-indigo-400"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                                Message
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })

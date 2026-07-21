@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   Send,
@@ -193,6 +194,9 @@ export function Messages() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeConversation?.messages.length]);
 
+  const getConversationId = (a: string, b: string) =>
+    a === b ? a : [a.trim(), b.trim()].sort().join('|');
+
   const handleSelectConversation = (id: string) => {
     setActiveConversation(id);
     const conversation = conversations.find((c) => c.id === id);
@@ -200,6 +204,26 @@ export function Messages() {
       setTo(conversation.contact);
     }
   };
+
+  const [searchParams] = useSearchParams();
+  useEffect(() => {
+    const toParam = searchParams.get('to');
+    if (toParam && telnyxNumber) {
+      const id = getConversationId(telnyxNumber, toParam);
+      const existing = conversations.find((c) => c.id === id || c.contact === toParam);
+      if (existing) {
+        handleSelectConversation(existing.id);
+      } else {
+        useAppStore.getState().setConversations([
+          { id, contact: toParam, avatar: getInitials(toParam), unreadCount: 0, messages: [] },
+          ...conversations,
+        ]);
+        setActiveConversation(id);
+        setTo(toParam);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleStartConversation = (e: React.FormEvent) => {
     e.preventDefault();
@@ -220,9 +244,6 @@ export function Messages() {
     setComposeNumber('');
     setComposeOpen(false);
   };
-
-  const getConversationId = (a: string, b: string) =>
-    a === b ? a : [a.trim(), b.trim()].sort().join('|');
 
   const sendTextMessage = async () => {
     if (!to.trim() || !body.trim()) return;
