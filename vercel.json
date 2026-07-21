@@ -11,6 +11,14 @@
   ],
   "rewrites": [
     {
+      "source": "/api/korapay-initiate-charge",
+      "destination": "/api/korapay"
+    },
+    {
+      "source": "/api/korapay-webhook",
+      "destination": "/api/korapay"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
