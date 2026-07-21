@@ -436,6 +436,39 @@ export function useSip() {
     setActiveCall((prev) => (prev ? { ...prev, speakerOn: !prev.speakerOn } : prev));
   }, []);
 
+  const sendDtmf = useCallback((digit: string) => {
+    const session = activeCall?.session;
+    if (!session) return;
+    try {
+      // Try WebRTC in-band DTMF first (most reliable for Telnyx/FreeSWITCH)
+      const pc = getPeerConnection(session);
+      if (pc) {
+        const senders = pc.getSenders();
+        const audioSender = senders.find((s) => s.track?.kind === 'audio');
+        if (audioSender?.track && audioSender.track.enabled) {
+          const dtmfSender = audioSender.dtmf;
+          if (dtmfSender) {
+            dtmfSender.insertDTMF(digit, 200, 50);
+            console.log('[SIP] DTMF sent via WebRTC:', digit);
+            return;
+          }
+        }
+      }
+      // Fallback: SIP INFO with dtmf-relay
+      session.info({
+        requestOptions: {
+          body: `Signal=${digit}\r\nDuration=200\r\n` as any,
+          extraHeaders: [
+            'Content-Type: application/dtmf-relay',
+          ],
+        },
+      });
+      console.log('[SIP] DTMF sent via SIP INFO:', digit);
+    } catch (err) {
+      console.error('[SIP] DTMF error:', err);
+    }
+  }, [activeCall]);
+
   const acceptCall = useCallback(() => {
     const session = activeCall?.session;
     if (!session || activeCall?.direction !== 'incoming') return;
@@ -492,6 +525,7 @@ export function useSip() {
     toggleSpeaker,
     acceptCall,
     rejectCall,
+    sendDtmf,
   };
 }
 
