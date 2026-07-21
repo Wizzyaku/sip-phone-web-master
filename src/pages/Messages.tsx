@@ -175,14 +175,18 @@ export function Messages() {
           createdAt: m.dateCreated,
         };
       });
+      const dedupedMapped = new Map<string, Message>();
+      for (const m of mapped) {
+        if (!dedupedMapped.has(m.id)) dedupedMapped.set(m.id, m);
+      }
+      const uniqueMapped = Array.from(dedupedMapped.values());
       const current = useAppStore.getState().messages;
       const merged = current.map((sm) => {
-        const apiMatch = mapped.find((m) => m.id === sm.id);
+        const apiMatch = uniqueMapped.find((m) => m.id === sm.id);
         if (!apiMatch) return sm;
-        // Keep our local direction if it differs from the API's direction.
         return sm.direction === 'outbound' ? { ...apiMatch, direction: 'outbound' as const } : apiMatch;
       });
-      const newApiMessages = mapped.filter((m) => !current.some((sm) => sm.id === m.id));
+      const newApiMessages = uniqueMapped.filter((m) => !current.some((sm) => sm.id === m.id));
       setStoreMessages([...merged, ...newApiMessages]);
     } catch (err) {
       setError('Failed to load messages. Using local messages only.');

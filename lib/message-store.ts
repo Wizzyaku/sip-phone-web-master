@@ -23,6 +23,7 @@ if (!url || !token) {
 
 const redis = new Redis({ url, token });
 const MESSAGES_KEY = 'messages';
+const SIDS_KEY = 'message_sids';
 const MAX_MESSAGES = 1000;
 
 export async function getMessages(): Promise<StoredMessage[]> {
@@ -36,6 +37,11 @@ export async function getMessages(): Promise<StoredMessage[]> {
 }
 
 export async function addMessage(msg: StoredMessage): Promise<void> {
+  const added = await redis.sadd(SIDS_KEY, msg.sid);
+  if (added === 0) {
+    console.log('[message-store] Duplicate message skipped:', msg.sid);
+    return;
+  }
   await redis.lpush(MESSAGES_KEY, JSON.stringify(msg));
   await redis.ltrim(MESSAGES_KEY, 0, MAX_MESSAGES - 1);
 }
