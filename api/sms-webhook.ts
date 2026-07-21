@@ -122,6 +122,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!from || !to || !msgBody || !sid) {
         console.warn('Incomplete inbound message payload:', payload);
       } else {
+        const fromNormalized = normalizePhone(from);
+        const serverClient = supabaseServer();
+
+        // Check if the 'from' number belongs to one of our users — if so,
+        // this is an outbound message echo, not a true inbound message.
+        const { data: fromOwner } = await serverClient
+          .from('phone_numbers')
+          .select('user_id, number')
+          .eq('active', true)
+          .filter('number', 'eq', fromNormalized)
+          .maybeSingle();
+
+        let fromIsOwned = !!fromOwner;
+        if (!fromIsOwned) {
+          const { data: altFromOwner } = await serverClient
+            .from('phone_numbers')
+            .select('user_id, number')
+            .eq('active', true)
+            .like('number', `%${fromNormalized}%`)
+            .limit(1)
+            .maybeSingle();
+          fromIsOwned = !!altFromOwner;
+        }
+
+        if (fromIsOwned) {
+          console.log('Skipping outbound message echo in webhook:', { from, to, body: msgBody });
+          res.status(200).json({ received: true, skipped: true });
+          return;
+        }
+
         await addMessage({
           sid,
           from,
@@ -135,7 +165,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Charge the number owner for inbound SMS
         try {
-          const serverClient = supabaseServer();
           const toNormalized = normalizePhone(to);
           const { data: phoneOwner } = await serverClient
             .from('phone_numbers')

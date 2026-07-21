@@ -173,6 +173,31 @@ export function Messages() {
       for (const m of mapped) {
         if (!dedupedMapped.has(m.id)) dedupedMapped.set(m.id, m);
       }
+      // Content-based dedup: if an outbound and inbound message have the same
+      // body and swapped from/to within 30 seconds, the inbound is an echo — drop it.
+      const outboundMsgs = mapped.filter((m) => m.direction === 'outbound');
+      const inboundToRemove = new Set<string>();
+      for (const ob of outboundMsgs) {
+        for (const ib of mapped) {
+          if (ib.direction !== 'inbound') continue;
+          if (ib.id === ob.id) continue;
+          if (ib.body !== ob.body) continue;
+          const obDigits = ob.from.replace(/\D/g, '');
+          const ibDigits = ib.to.replace(/\D/g, '');
+          const obToDigits = ob.to.replace(/\D/g, '');
+          const ibFromDigits = ib.from.replace(/\D/g, '');
+          if (obDigits === ibDigits && obToDigits === ibFromDigits) {
+            const obTime = new Date(ob.createdAt).getTime();
+            const ibTime = new Date(ib.createdAt).getTime();
+            if (Math.abs(obTime - ibTime) < 30000) {
+              inboundToRemove.add(ib.id);
+            }
+          }
+        }
+      }
+      for (const id of inboundToRemove) {
+        dedupedMapped.delete(id);
+      }
       const uniqueMapped = Array.from(dedupedMapped.values());
       const current = useAppStore.getState().messages;
       const merged = current.map((sm) => {
