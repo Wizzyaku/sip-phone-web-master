@@ -15,6 +15,65 @@ export const config = {
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
 
+async function getOrCreateMessagingProfile(): Promise<string | null> {
+  try {
+    const listRes = await fetch('https://api.telnyx.com/v2/messaging_profiles?page[size]=1', {
+      headers: { Authorization: `Bearer ${TELNYX_API_KEY}` },
+    });
+    const listData = await listRes.json();
+    const existing = listData?.data?.[0];
+    if (existing?.id) {
+      return existing.id as string;
+    }
+    const createRes = await fetch('https://api.telnyx.com/v2/messaging_profiles', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${TELNYX_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Default Messaging Profile',
+        whitelisted_destinations: ['US', 'CA', 'GB'],
+      }),
+    });
+    const createData = await createRes.json();
+    if (createData?.data?.id) {
+      console.log('[Telnyx] Created messaging profile:', createData.data.id);
+      return createData.data.id as string;
+    }
+    console.error('[Telnyx] Failed to create messaging profile:', createData);
+    return null;
+  } catch (err) {
+    console.error('[Telnyx] getOrCreateMessagingProfile error:', err);
+    return null;
+  }
+}
+
+async function assignNumberToMessagingProfile(phoneNumber: string): Promise<boolean> {
+  try {
+    const profileId = await getOrCreateMessagingProfile();
+    if (!profileId) return false;
+    const assignRes = await fetch(`https://api.telnyx.com/v2/messaging_phone_numbers/${phoneNumber}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${TELNYX_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ messaging_profile_id: profileId }),
+    });
+    const assignData = await assignRes.json();
+    if (assignRes.ok) {
+      console.log('[Telnyx] Assigned', phoneNumber, 'to messaging profile', profileId);
+      return true;
+    }
+    console.error('[Telnyx] Failed to assign number to profile:', assignData);
+    return false;
+  } catch (err) {
+    console.error('[Telnyx] assignNumberToMessagingProfile error:', err);
+    return false;
+  }
+}
+
 function normalizePhone(number: string): string {
   let digits = number.replace(/\D/g, '');
   if (digits.length === 10) {
@@ -165,7 +224,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!response.ok) {
       console.error('Telnyx send error:', data);
-      res.status(response.status).json({ error: data?.errors?.[0]?.detail || 'Telnyx request failed' });
+      const errorDetail = data?.errors?.[0]?.detail || '';
+      if (errorDetail.includes('messaging profile') && fromNumber) {
+        console.log('[Telnyx] Number not associated with messaging profile, attempting auto-assign...');
+        const assigned = await assignNumberToMessagingProfile(fromNumber);
+        if (assigned) {
+          console.log('[Telnyx] Retrying SMS send after profile assignment...');
+          const retryResponse = await fetch('https://api.telnyx.com/v2/messages', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${TELNYX_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              from: fromNumber,
+              to,
+              text: messageBody,
+            }),
+          });
+          const retryData = await retryResponse.json();
+          if (!retryResponse.ok) {
+            console.error('Telnyx retry send error:', retryData);
+            res.status(retryResponse.status).json({ error: retryData?.errors?.[0]?.detail || 'Telnyx request failed' });
+            return;
+          }
+          const retryMessage = retryData.data;
+          const retryRecord = {
+            sid: retryMessage.id,
+            from: retryMessage.from?.phone_number || fromNumber,
+            to: retryMessage.to?.[0]?.phone_number || to,
+            body: retryMessage.text || messageBody,
+            direction: 'outbound' as const,
+            dateCreated: retryMessage.received_at || new Date().toISOString(),
+            status: retryMessage.to?.[0]?.status || 'queued',
+          };
+          await addMessage(retryRecord);
+          console.log('Outbound SMS sent (after retry):', retryRecord);
+          res.status(200).json({ sid: retryMessage.id, status: retryRecord.status, cost: smsCost });
+          return;
+        }
+      }
+      res.status(response.status).json({ error: errorDetail || 'Telnyx request failed' });
       return;
     }
 

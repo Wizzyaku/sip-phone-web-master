@@ -171,6 +171,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const actualMonthlyCost = Number(purchased?.cost) || monthlyCost || 1.0;
     const flag = flagForCountry(countryCode);
 
+    // Step 2.5: Assign the number to a messaging profile for SMS capability
+    try {
+      let profileId: string | null = null;
+      const listRes = await fetch('https://api.telnyx.com/v2/messaging_profiles?page[size]=1', {
+        headers: { Authorization: `Bearer ${TELNYX_API_KEY}` },
+      });
+      const listData = await listRes.json();
+      const existing = listData?.data?.[0];
+      if (existing?.id) {
+        profileId = existing.id as string;
+      } else {
+        const createRes = await fetch('https://api.telnyx.com/v2/messaging_profiles', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${TELNYX_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: 'Default Messaging Profile',
+            whitelisted_destinations: ['US', 'CA', 'GB'],
+          }),
+        });
+        const createData = await createRes.json();
+        profileId = createData?.data?.id || null;
+      }
+      if (profileId) {
+        await fetch(`https://api.telnyx.com/v2/messaging_phone_numbers/${purchasedNumber}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${TELNYX_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ messaging_profile_id: profileId }),
+        });
+        console.log('[Telnyx] Assigned', purchasedNumber, 'to messaging profile', profileId);
+      }
+    } catch (profileErr) {
+      console.warn('[Telnyx] Failed to assign messaging profile (non-fatal):', profileErr);
+    }
+
     // Step 3: Save the purchased number to Supabase for this user
     // next_billing_date and billing_status are in the new schema but may not be applied yet
     const { error: insertError } = await serverClient
