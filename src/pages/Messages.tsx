@@ -142,9 +142,6 @@ export function Messages() {
   const fetchMessages = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const currentNumber = useAppStore.getState().telnyxNumber;
-    const fromNumber = selectedFromNumber || currentNumber;
-    const normalizeDigits = (n: string) => n.replace(/\D/g, '');
     try {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
@@ -160,9 +157,6 @@ export function Messages() {
       });
       const apiMessages: SmsMessage[] = res.data;
       const mapped: Message[] = apiMessages.map((m) => {
-        const fromDigits = normalizeDigits(m.from);
-        const myDigits = fromNumber ? normalizeDigits(fromNumber) : '';
-        const isFromMe = myDigits ? fromDigits === myDigits : m.direction === 'outbound';
         return {
           id: m.sid,
           conversationId: m.from === m.to ? m.to : getConversationId(m.from, m.to),
@@ -170,8 +164,8 @@ export function Messages() {
           to: m.to,
           body: m.body,
           type: 'text' as MessageType,
-          direction: isFromMe ? ('outbound' as const) : ('inbound' as const),
-          status: m.status || (isFromMe ? 'sent' : 'received'),
+          direction: m.direction === 'outbound' ? ('outbound' as const) : ('inbound' as const),
+          status: m.status || (m.direction === 'outbound' ? 'sent' : 'received'),
           createdAt: m.dateCreated,
         };
       });
@@ -193,7 +187,7 @@ export function Messages() {
     } finally {
       setLoading(false);
     }
-  }, [setStoreMessages, selectedFromNumber]);
+  }, [setStoreMessages]);
 
   useEffect(() => {
     fetchMessages();
