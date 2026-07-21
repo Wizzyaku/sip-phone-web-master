@@ -53,11 +53,11 @@ function parseJsonBody(req: VercelRequest): Record<string, unknown> {
 }
 
 function extractSenderFromForwarded(text: string): { from?: string; to?: string } {
-  const fromMatch = text.match(/New SMS from (\+?[\d\s()-]+)/);
-  const toMatch = text.match(/To:\s*(\+?[\d\s()-]+)/);
+  const originMatch = text.match(/New SMS (?:from|to)\s+(\+?[\d\s()-]+)/);
+  const userMatch = text.match(/(?:To|From):\s*(\+?[\d\s()-]+)/);
   return {
-    from: fromMatch ? fromMatch[1].replace(/\s/g, '') : undefined,
-    to: toMatch ? toMatch[1].replace(/\s/g, '') : undefined,
+    from: originMatch ? originMatch[1].replace(/\s/g, '') : undefined,
+    to: userMatch ? userMatch[1].replace(/\s/g, '') : undefined,
   };
 }
 

@@ -14,6 +14,8 @@ export const config = {
 };
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 async function getOrCreateMessagingProfile(): Promise<string | null> {
   try {
@@ -80,6 +82,55 @@ function normalizePhone(number: string): string {
     digits = '1' + digits;
   }
   return '+' + digits;
+}
+
+function parseNumberMap(): Map<string, string> {
+  const map = new Map<string, string>();
+  const raw = process.env.TELEGRAM_NUMBER_MAP;
+  if (!raw) return map;
+  const entries = raw.split(',');
+  for (const entry of entries) {
+    const [phone, chatId] = entry.split(':');
+    if (phone && chatId) {
+      map.set(phone.trim().replace(/\D/g, ''), chatId.trim());
+    }
+  }
+  return map;
+}
+
+function getChatIdForNumber(number: string | undefined): string | undefined {
+  const numberMap = parseNumberMap();
+  if (!number) return TELEGRAM_CHAT_ID;
+  const normalized = number.replace(/\D/g, '');
+  return numberMap.get(normalized) || TELEGRAM_CHAT_ID;
+}
+
+async function sendToTelegram(text: string, chatId: string | undefined) {
+  if (!TELEGRAM_BOT_TOKEN || !chatId) {
+    console.warn('Telegram env vars missing:', {
+      hasToken: !!TELEGRAM_BOT_TOKEN,
+      hasChatId: !!chatId,
+    });
+    return;
+  }
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'Markdown',
+      }),
+    });
+    const responseBody = await response.text();
+    console.log('Telegram API response:', response.status, responseBody);
+    if (!response.ok) {
+      console.error('Telegram API error:', response.status, responseBody);
+    }
+  } catch (err) {
+    console.error('Telegram send failed:', err);
+  }
 }
 
 function parseJsonBody(req: VercelRequest): Record<string, unknown> {
@@ -260,6 +311,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           };
           await addMessage(retryRecord);
           console.log('Outbound SMS sent (after retry):', retryRecord);
+
+          const retryChatId = getChatIdForNumber(retryRecord.from);
+          await sendToTelegram(
+            `*New SMS to ${retryRecord.to}*\n\n${retryRecord.body}\n\n_From: ${retryRecord.from}_\n\nReply to this message to respond.`,
+            retryChatId
+          );
+
           res.status(200).json({ sid: retryMessage.id, status: retryRecord.status, cost: smsCost });
           return;
         }
@@ -280,6 +338,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     await addMessage(record);
     console.log('Outbound SMS sent:', record);
+
+    const chatId = getChatIdForNumber(record.from);
+    await sendToTelegram(
+      `*New SMS to ${record.to}*\n\n${record.body}\n\n_From: ${record.from}_\n\nReply to this message to respond.`,
+      chatId
+    );
 
     // Charge coins for the SMS — try charge_sms RPC first, fall back to debit_tokens
     let charged = false;
