@@ -61,7 +61,7 @@ export default function AdminNumbers() {
           return;
         }
 
-        const res = await axios.get('/api/admin/numbers', {
+        const res = await axios.get('/api/admin?action=numbers', {
           headers: { Authorization: `Bearer ${token}` },
         });
         setData(res.data);

@@ -68,7 +68,7 @@ export default function AdminMessages() {
           return;
         }
 
-        const res = await axios.get('/api/admin/messages', {
+        const res = await axios.get('/api/admin?action=messages', {
           headers: { Authorization: `Bearer ${token}` },
         });
         setData(res.data);

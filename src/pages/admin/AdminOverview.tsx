@@ -81,7 +81,7 @@ export default function AdminOverview() {
           return;
         }
 
-        const res = await axios.get('/api/admin/overview', {
+        const res = await axios.get('/api/admin?action=overview', {
           headers: { Authorization: `Bearer ${token}` },
         });
         setStats(res.data);

@@ -23,6 +23,10 @@
       "destination": "/api/send-sms"
     },
     {
+      "source": "/api/admin",
+      "destination": "/api/admin/index"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
