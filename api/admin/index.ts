@@ -453,17 +453,28 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
     return;
   }
 
-  const available = (numbers || [])
-    .filter((n) => !n.user_id)
-    .map((n) => ({
-      id: n.id,
-      number: n.number,
-      label: n.label || '',
-      flag: n.flag || '🌐',
-      features: n.features || [],
-      active: n.active,
-      monthlyCost: n.monthly_cost || 0,
-    }));
+  const userIds = [...new Set((numbers || []).map((n) => n.user_id).filter(Boolean))] as string[];
+  let ownerMap = new Map<string, string>();
+  if (userIds.length > 0) {
+    try {
+      const { data: owners } = await serverClient
+        .from('profiles')
+        .select('id, name, email')
+        .in('id', userIds);
+      ownerMap = new Map((owners || []).map((o) => [o.id, o.name || o.email || 'Unknown']));
+    } catch { /* ignore */ }
+  }
+
+  const available = (numbers || []).map((n) => ({
+    id: n.id,
+    number: n.number,
+    label: n.label || '',
+    flag: n.flag || '🌐',
+    features: n.features || [],
+    active: n.active,
+    monthlyCost: n.monthly_cost || 0,
+    currentOwner: n.user_id ? ownerMap.get(n.user_id) || 'Unknown' : null,
+  }));
 
   res.status(200).json({ available, total: available.length });
 }
@@ -483,11 +494,6 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
 
   if (fetchError || !number) {
     res.status(404).json({ error: 'Phone number not found.' });
-    return;
-  }
-
-  if (number.user_id) {
-    res.status(400).json({ error: 'This number is already assigned to a user.' });
     return;
   }
 

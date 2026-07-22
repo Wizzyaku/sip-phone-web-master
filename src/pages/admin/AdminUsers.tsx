@@ -11,6 +11,7 @@ interface AvailableNumber {
   features: string[];
   active: boolean;
   monthlyCost: number;
+  currentOwner: string | null;
 }
 
 interface UserNumber {
@@ -619,7 +620,7 @@ export default function AdminUsers() {
                       )}
                       {!loadingNumbers && availableNumbers.length === 0 && (
                         <p className="text-on-surface-variant text-sm italic text-center py-md">
-                          No available numbers to assign.
+                          No numbers found on the platform.
                         </p>
                       )}
                       {!loadingNumbers && availableNumbers
@@ -633,16 +634,19 @@ export default function AdminUsers() {
                             key={n.id}
                             className="flex items-center justify-between bg-surface-container-low rounded-lg px-sm py-2"
                           >
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <span className="font-body-md font-medium text-on-surface block truncate">{n.number}</span>
                               {n.label && <span className="text-on-surface-variant text-xs">{n.label}</span>}
+                              {n.currentOwner && (
+                                <span className="text-xs text-amber-600 ml-1">Owned by {n.currentOwner}</span>
+                              )}
                             </div>
                             <button
                               onClick={() => handleAssignNumber(n.id, n.number)}
                               disabled={assigningId === n.id}
                               className="admin-action-btn !px-3 !py-1.5 text-xs shrink-0 ml-2"
                             >
-                              {assigningId === n.id ? 'Assigning...' : 'Assign'}
+                              {assigningId === n.id ? 'Assigning...' : n.currentOwner ? 'Reassign' : 'Assign'}
                             </button>
                           </div>
                         ))
