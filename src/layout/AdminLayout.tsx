@@ -7,11 +7,7 @@ const navItems = [
   { icon: 'phone_iphone', label: 'Phone Numbers', to: '/admin/numbers' },
   { icon: 'chat', label: 'Messages', to: '/admin/messages' },
   { icon: 'call', label: 'Calls', to: '/admin/calls' },
-  { icon: 'dialpad', label: 'Dialer', to: '/admin/dialer' },
-  { icon: 'contacts', label: 'Contacts', to: '/admin/contacts' },
   { icon: 'payments', label: 'Billing', to: '/admin/payments' },
-  { icon: 'bar_chart', label: 'Usage', to: '/admin/usage' },
-  { icon: 'settings', label: 'Settings', to: '/admin/settings' },
 ];
 
 function navClass({ isActive }: { isActive: boolean }) {
@@ -125,18 +121,11 @@ export function AdminLayout() {
           <span className="font-label-sm text-[10px]">Home</span>
         </Link>
         <Link
-          to="/admin/calls"
+          to="/admin/numbers"
           className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90"
         >
-          <span className="material-symbols-outlined">call</span>
-          <span className="font-label-sm text-[10px]">Calls</span>
-        </Link>
-        <Link
-          to="/admin/dialer"
-          className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90"
-        >
-          <span className="material-symbols-outlined">dialpad</span>
-          <span className="font-label-sm text-[10px]">Dialer</span>
+          <span className="material-symbols-outlined">phone_iphone</span>
+          <span className="font-label-sm text-[10px]">Numbers</span>
         </Link>
         <Link
           to="/admin/messages"
@@ -146,11 +135,11 @@ export function AdminLayout() {
           <span className="font-label-sm text-[10px]">SMS</span>
         </Link>
         <Link
-          to="/admin/settings"
+          to="/admin/payments"
           className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90"
         >
-          <span className="material-symbols-outlined">more_horiz</span>
-          <span className="font-label-sm text-[10px]">More</span>
+          <span className="material-symbols-outlined">payments</span>
+          <span className="font-label-sm text-[10px]">Billing</span>
         </Link>
       </footer>
     </div>
