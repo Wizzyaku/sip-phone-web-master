@@ -149,23 +149,40 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
 }
 
 async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
-  const { data: profiles, error: profilesError } = await serverClient
+  let profilesResult = await serverClient
     .from('profiles')
     .select('id, name, email, avatar, phone_number, role, created_at')
     .order('created_at', { ascending: false });
 
-  if (profilesError) {
+  if (profilesResult.error && (profilesResult.error.message?.includes('phone_number') || profilesResult.error.code === '42703')) {
+    profilesResult = await serverClient
+      .from('profiles')
+      .select('id, name, email, avatar, role, created_at')
+      .order('created_at', { ascending: false });
+  }
+
+  if (profilesResult.error) {
     res.status(500).json({ error: 'Failed to fetch users.' });
     return;
   }
 
+  const profiles = profilesResult.data || [];
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const userIds = (profiles || []).map((p) => p.id);
 
+  const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
+
   const [balanceResult, numbersResult, recentSessions] = await Promise.all([
-    serverClient.from('user_balances').select('id, tokens').in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']),
-    serverClient.from('phone_numbers').select('user_id').in('user_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']),
-    serverClient.from('admin_logs').select('admin_email, created_at').gte('created_at', thirtyDaysAgo),
+    serverClient.from('user_balances').select('id, tokens').in('id', safeIds).then(
+      (r) => r,
+      () => ({ data: null, error: null } as never)
+    ),
+    serverClient.from('phone_numbers').select('user_id').in('user_id', safeIds),
+    serverClient.from('admin_logs').select('admin_email, created_at').gte('created_at', thirtyDaysAgo).then(
+      (r) => r,
+      () => ({ data: null, error: null } as never)
+    ),
   ]);
 
   const balanceMap = new Map((balanceResult.data || []).map((b) => [b.id, b.tokens || 0]));
