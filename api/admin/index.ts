@@ -442,11 +442,37 @@ async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServe
   res.status(200).json({ success: true, userId, tokens });
 }
 
+const PHONE_NUMBER_COLUMN_CANDIDATES = ['number', 'phone', 'phone_number', 'tel', 'value', 'num'];
+
+async function getPhoneNumberColumnName(serverClient: ReturnType<typeof supabaseServer>): Promise<string | null> {
+  try {
+    const { data: columns } = await serverClient
+      .from('information_schema.columns')
+      .select('column_name')
+      .eq('table_name', 'phone_numbers')
+      .eq('table_schema', 'public');
+
+    const names = (columns || []).map((c) => c.column_name);
+    const matched = PHONE_NUMBER_COLUMN_CANDIDATES.find((c) => names.includes(c));
+    console.log('[admin/available-numbers] phone_numbers columns:', names, 'matched:', matched);
+    return matched || null;
+  } catch (e) {
+    console.warn('[admin/available-numbers] failed to read columns:', (e as Error).message);
+    return null;
+  }
+}
+
 async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  const phoneCol = await getPhoneNumberColumnName(serverClient);
+  if (!phoneCol) {
+    res.status(500).json({ error: 'Could not detect phone number column in phone_numbers table.' });
+    return;
+  }
+
   const { data: numbers, error } = await serverClient
     .from('phone_numbers')
     .select('*')
-    .order('number', { ascending: true });
+    .order(phoneCol, { ascending: true });
 
   if (error) {
     console.error('[admin/available-numbers] query error:', error.message);
@@ -456,7 +482,6 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
 
   console.log('[admin/available-numbers] raw numbers count:', (numbers || []).length);
   if (numbers && numbers.length > 0) {
-    console.log('[admin/available-numbers] first row keys:', Object.keys(numbers[0]));
     console.log('[admin/available-numbers] first row sample:', JSON.stringify(numbers[0]));
   }
 
@@ -490,7 +515,7 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
 
   const available = (numbers || []).map((n) => ({
     id: n.id,
-    number: n.number || '',
+    number: n[phoneCol] || '',
     label: n.label || '',
     flag: n.flag || '🌐',
     features: n.features || [],
