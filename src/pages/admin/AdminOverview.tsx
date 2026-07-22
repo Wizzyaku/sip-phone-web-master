@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { AdminPage } from '../../components/AdminPage';
 
 interface AdminStats {
   totalUsers: number;
@@ -98,28 +99,23 @@ export default function AdminOverview() {
   const revenue = stats?.revenue ?? { value: 0, currency: 'USD' };
 
   return (
-    <div>
-      <div className="mb-md">
-        <h2 className="font-headline-lg text-headline-lg text-on-surface mb-xs">Admin Overview</h2>
-        <p className="text-on-surface-variant font-body-md">Real-time infrastructure health and commercial performance.</p>
-      </div>
-
+    <AdminPage title="Admin Overview" subtitle="Real-time infrastructure health and commercial performance.">
       {loading && (
-        <div className="glass-card p-md rounded-xl text-center">
+        <div className="admin-card-lg admin-section text-center">
           <div className="inline-block w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
       {error && (
-        <div className="glass-card p-md rounded-xl mb-lg text-error">
+        <div className="admin-card-lg admin-section text-error">
           <p>{error}</p>
         </div>
       )}
 
       {!loading && !error && stats && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter mb-md">
-            <div className="glass-card p-sm rounded-xl flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
+          <div className="admin-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 admin-section">
+            <div className="admin-card flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
               <div className="flex justify-between items-start mb-sm">
                 <div className="p-3 bg-primary/10 rounded-xl text-primary">
                   <span className="material-symbols-outlined">group</span>
@@ -132,7 +128,7 @@ export default function AdminOverview() {
               </div>
             </div>
 
-            <div className="glass-card p-sm rounded-xl flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
+            <div className="admin-card flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
               <div className="flex justify-between items-start mb-sm">
                 <div className="p-3 bg-secondary/10 rounded-xl text-secondary">
                   <span className="material-symbols-outlined">dialer_sip</span>
@@ -145,7 +141,7 @@ export default function AdminOverview() {
               </div>
             </div>
 
-            <div className="glass-card p-sm rounded-xl flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
+            <div className="admin-card flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
               <div className="flex justify-between items-start mb-sm">
                 <div className="p-3 bg-tertiary-container/10 rounded-xl text-tertiary">
                   <span className="material-symbols-outlined">payments</span>
@@ -158,7 +154,7 @@ export default function AdminOverview() {
               </div>
             </div>
 
-            <div className="glass-card p-sm rounded-xl flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
+            <div className="admin-card flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
               <div className="flex justify-between items-start mb-sm">
                 <div className="p-3 bg-error/10 rounded-xl text-error">
                   <span className="material-symbols-outlined">pending_actions</span>
@@ -172,8 +168,8 @@ export default function AdminOverview() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-md mb-md">
-            <div className="lg:col-span-2 glass-card p-md rounded-xl flex flex-col h-[280px]">
+          <div className="admin-grid grid-cols-1 lg:grid-cols-3 admin-section">
+            <div className="lg:col-span-2 admin-card-lg flex flex-col h-[280px]">
               <div className="flex justify-between items-center mb-md">
                 <h4 className="font-headline-md text-headline-md text-on-surface">Revenue Growth</h4>
                 <select className="bg-surface-container-low border-none rounded-lg text-label-md focus:ring-primary/20 outline-none">
@@ -204,12 +200,12 @@ export default function AdminOverview() {
               </div>
             </div>
 
-            <div className="glass-card p-md rounded-xl flex flex-col h-[280px]">
+            <div className="admin-card-lg flex flex-col h-[280px]">
               <h4 className="font-headline-md text-headline-md text-on-surface mb-md">Quick Actions</h4>
               <div className="space-y-1 flex-1">
                 <button
                   onClick={() => navigate('/admin/users')}
-                  className="w-full flex items-center justify-between p-2 rounded-xl bg-white/50 border border-white hover:bg-primary hover:text-white transition-all duration-300 group shadow-sm"
+                  className="admin-action-btn hover:bg-primary hover:text-white transition-all duration-300 group"
                 >
                   <div className="flex items-center gap-md">
                     <span className="material-symbols-outlined text-primary group-hover:text-white">person_add</span>
@@ -219,7 +215,7 @@ export default function AdminOverview() {
                 </button>
                 <button
                   onClick={() => navigate('/admin/payments')}
-                  className="w-full flex items-center justify-between p-2 rounded-xl bg-white/50 border border-white hover:bg-primary hover:text-white transition-all duration-300 group shadow-sm"
+                  className="admin-action-btn hover:bg-primary hover:text-white transition-all duration-300 group"
                 >
                   <div className="flex items-center gap-md">
                     <span className="material-symbols-outlined text-primary group-hover:text-white">receipt_long</span>
@@ -227,7 +223,7 @@ export default function AdminOverview() {
                   </div>
                   <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
                 </button>
-                <button className="w-full flex items-center justify-between p-2 rounded-xl bg-white/50 border border-white hover:bg-primary hover:text-white transition-all duration-300 group shadow-sm">
+                <button className="admin-action-btn hover:bg-primary hover:text-white transition-all duration-300 group">
                   <div className="flex items-center gap-md">
                     <span className="material-symbols-outlined text-primary group-hover:text-white">monitor_heart</span>
                     <span className="font-body-md font-semibold">System Status</span>
@@ -239,7 +235,7 @@ export default function AdminOverview() {
                 </button>
                 <button
                   onClick={() => navigate('/admin/numbers')}
-                  className="w-full flex items-center justify-between p-2 rounded-xl bg-white/50 border border-white hover:bg-primary hover:text-white transition-all duration-300 group shadow-sm"
+                  className="admin-action-btn hover:bg-primary hover:text-white transition-all duration-300 group"
                 >
                   <div className="flex items-center gap-md">
                     <span className="material-symbols-outlined text-primary group-hover:text-white">phone_iphone</span>
@@ -251,33 +247,33 @@ export default function AdminOverview() {
             </div>
           </div>
 
-          <div className="glass-card rounded-xl overflow-hidden border border-white/20">
+          <div className="admin-card-lg !p-0 overflow-hidden border border-white/20">
             <div className="px-md py-sm border-b border-outline-variant/10 flex justify-between items-center bg-white/30">
               <h4 className="font-headline-md text-headline-md text-on-surface">Administrative Activity</h4>
               <button className="text-primary font-semibold text-label-md hover:underline">View All Logs</button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="admin-table">
                 <thead>
                   <tr className="bg-surface-container-low/50">
-                    <th className="px-md py-2 text-left font-label-md text-on-surface-variant uppercase tracking-wider">Admin User</th>
-                    <th className="px-md py-2 text-left font-label-md text-on-surface-variant uppercase tracking-wider">Action Taken</th>
-                    <th className="px-md py-2 text-left font-label-md text-on-surface-variant uppercase tracking-wider">Entity</th>
-                    <th className="px-md py-2 text-left font-label-md text-on-surface-variant uppercase tracking-wider">Timestamp</th>
-                    <th className="px-md py-2 text-right font-label-md text-on-surface-variant uppercase tracking-wider">Status</th>
+                    <th className="text-left">Admin User</th>
+                    <th className="text-left">Action Taken</th>
+                    <th className="text-left">Entity</th>
+                    <th className="text-left">Timestamp</th>
+                    <th className="text-right">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-outline-variant/10">
                   {stats.recentActivity.length === 0 && (
                     <tr>
-                      <td className="px-md py-2 text-body-md text-on-surface-variant" colSpan={5}>
+                      <td colSpan={5}>
                         No administrative activity recorded yet.
                       </td>
                     </tr>
                   )}
                   {stats.recentActivity.map((log) => (
                     <tr key={log.id} className="hover:bg-primary/5 transition-colors cursor-pointer group">
-                      <td className="px-md py-2">
+                      <td>
                         <div className="flex items-center gap-sm">
                           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                             {log.initials}
@@ -285,10 +281,10 @@ export default function AdminOverview() {
                           <span className="font-body-md font-medium text-on-surface">{log.admin}</span>
                         </div>
                       </td>
-                      <td className="px-md py-2 text-body-md text-on-surface-variant">{log.action}</td>
-                      <td className="px-md py-2 font-mono text-sm text-primary">{log.entity}</td>
-                      <td className="px-md py-2 text-body-md text-on-surface-variant">{timeAgo(log.timestamp)}</td>
-                      <td className="px-md py-2 text-right">
+                      <td>{log.action}</td>
+                      <td className="font-mono text-sm text-primary">{log.entity}</td>
+                      <td>{timeAgo(log.timestamp)}</td>
+                      <td className="text-right">
                         <StatusBadge status={log.status} />
                       </td>
                     </tr>
@@ -299,6 +295,6 @@ export default function AdminOverview() {
           </div>
         </>
       )}
-    </div>
+    </AdminPage>
   );
 }
