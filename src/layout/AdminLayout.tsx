@@ -27,7 +27,7 @@ export function AdminLayout() {
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Admin')}&background=4241bc&color=fff&size=128`;
 
   return (
-    <div className="min-h-screen bg-surface text-on-background font-sans">
+    <div className="min-h-screen text-on-background font-sans">
       <aside
         className="fixed h-full w-[280px] left-0 top-0 backdrop-blur-xl border-r border-white/20 bg-white/20 z-50 hidden md:flex flex-col gap-base py-lg px-md shadow-[10px_0_30px_rgba(91,91,214,0.08)]"
         id="sidebar"
