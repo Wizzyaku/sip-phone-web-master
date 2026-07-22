@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useAppStore } from '../store/appStore';
 
 const navItems = [
@@ -22,6 +23,14 @@ function navClass({ isActive }: { isActive: boolean }) {
 
 export function AdminLayout() {
   const user = useAppStore((s) => s.user);
+
+  useEffect(() => {
+    document.documentElement.classList.remove('dark');
+    return () => {
+      const store = useAppStore.getState();
+      document.documentElement.classList.toggle('dark', store.resolvedTheme === 'dark');
+    };
+  }, []);
   const avatarUrl =
     user.avatar ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'Admin')}&background=4241bc&color=fff&size=128`;
