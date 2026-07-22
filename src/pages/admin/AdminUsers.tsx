@@ -3,6 +3,13 @@ import axios from 'axios';
 import { supabase } from '../../lib/supabase';
 import { AdminPage } from '../../components/AdminPage';
 
+interface UserNumber {
+  id: string;
+  number: string;
+  label: string;
+  active: boolean;
+}
+
 interface User {
   id: string;
   name: string;
@@ -13,6 +20,8 @@ interface User {
   createdAt: string | null;
   tokenBalance: number;
   assignedNumbers: number;
+  numbers: UserNumber[];
+  telegram: string | null;
 }
 
 interface UsersData {
@@ -42,6 +51,12 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [numbersExpanded, setNumbersExpanded] = useState(false);
+  const [editBalance, setEditBalance] = useState(false);
+  const [balanceInput, setBalanceInput] = useState('');
+  const [balanceSaving, setBalanceSaving] = useState(false);
+  const [balanceMsg, setBalanceMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -68,6 +83,61 @@ export default function AdminUsers() {
 
     load();
   }, []);
+
+  const openDrawer = (user: User) => {
+    setSelectedUser(user);
+    setNumbersExpanded(false);
+    setEditBalance(false);
+    setBalanceMsg(null);
+    setDrawerOpen(true);
+  };
+
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setTimeout(() => setSelectedUser(null), 300);
+  };
+
+  const handleSaveBalance = async () => {
+    if (!selectedUser) return;
+    const newBalance = parseInt(balanceInput, 10);
+    if (isNaN(newBalance) || newBalance < 0) {
+      setBalanceMsg('Please enter a valid number.');
+      return;
+    }
+
+    setBalanceSaving(true);
+    setBalanceMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setBalanceMsg('No active session.');
+        setBalanceSaving(false);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=update-balance',
+        { userId: selectedUser.id, tokens: newBalance },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setData((prev) => prev ? {
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === selectedUser.id ? { ...u, tokenBalance: newBalance } : u
+        ),
+      } : prev);
+      setSelectedUser((prev) => prev ? { ...prev, tokenBalance: newBalance } : prev);
+      setEditBalance(false);
+      setBalanceMsg('Balance updated successfully.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to update balance.';
+      setBalanceMsg(message);
+    } finally {
+      setBalanceSaving(false);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     if (!data) return [];
@@ -116,7 +186,7 @@ export default function AdminUsers() {
             <div className="admin-card flex flex-col justify-between group hover:scale-[1.02] transition-transform duration-300">
               <div className="flex justify-between items-start mb-sm">
                 <div className="p-3 bg-[#00a651]/10 rounded-xl text-[#00a651]">
-                  <span className="material-symbols-outlined">active_account</span>
+                  <span className="material-symbols-outlined">person_check</span>
                 </div>
               </div>
               <div>
@@ -200,7 +270,7 @@ export default function AdminUsers() {
                   {filteredUsers.map((u) => (
                     <tr
                       key={u.id}
-                      onClick={() => setSelectedUser(u)}
+                      onClick={() => openDrawer(u)}
                       className="hover:bg-primary/5 transition-colors cursor-pointer group"
                     >
                       <td>
@@ -227,58 +297,189 @@ export default function AdminUsers() {
             </div>
           </div>
 
+          {/* Backdrop */}
           {selectedUser && (
             <div
-              className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-              onClick={() => setSelectedUser(null)}
+              className={`fixed inset-0 bg-black/30 backdrop-blur-sm z-50 transition-opacity duration-300 ${
+                drawerOpen ? 'opacity-100' : 'opacity-0'
+              }`}
+              onClick={closeDrawer}
+            />
+          )}
+
+          {/* Slide-out drawer */}
+          {selectedUser && (
+            <div
+              className={`fixed top-0 right-0 h-full w-full max-w-md bg-surface z-50 shadow-2xl overflow-y-auto transition-transform duration-300 ease-out ${
+                drawerOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
             >
-              <div
-                className="admin-card-lg max-w-md w-full max-h-[80vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex justify-between items-start mb-md">
+              {/* Header */}
+              <div className="sticky top-0 bg-surface/95 backdrop-blur-sm border-b border-outline-variant/10 px-md py-md z-10">
+                <div className="flex justify-between items-center mb-sm">
                   <h4 className="font-headline-md text-headline-md text-on-surface">User Details</h4>
                   <button
-                    onClick={() => setSelectedUser(null)}
+                    onClick={closeDrawer}
                     className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors"
                   >
                     close
                   </button>
                 </div>
-                <div className="flex items-center gap-md mb-md">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl overflow-hidden">
+                <div className="flex items-center gap-md">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl overflow-hidden shrink-0">
                     {selectedUser.avatar ? (
                       <img src={selectedUser.avatar} alt={selectedUser.name} className="w-full h-full object-cover rounded-full" />
                     ) : (
                       selectedUser.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
                     )}
                   </div>
-                  <div>
-                    <h3 className="font-headline-md text-headline-md text-on-surface">{selectedUser.name}</h3>
-                    <p className="text-on-surface-variant text-sm">{selectedUser.email}</p>
+                  <div className="min-w-0">
+                    <h3 className="font-headline-md text-headline-md text-on-surface truncate">{selectedUser.name}</h3>
+                    <p className="text-on-surface-variant text-sm truncate">{selectedUser.email}</p>
+                    <div className="mt-1"><RoleBadge role={selectedUser.role} /></div>
                   </div>
                 </div>
-                <div className="space-y-sm">
-                  <div className="flex justify-between">
-                    <span className="text-on-surface-variant text-label-md">Role</span>
-                    <RoleBadge role={selectedUser.role} />
+              </div>
+
+              {/* Body sections */}
+              <div className="px-md py-md space-y-md">
+                {/* Profile Details Section */}
+                <div className="admin-card !p-md">
+                  <div className="flex items-center gap-sm mb-sm">
+                    <span className="material-symbols-outlined text-primary text-lg">person</span>
+                    <h5 className="font-body-md font-semibold text-on-surface">Profile Details</h5>
+                  </div>
+                  <div className="space-y-sm">
+                    <div className="flex justify-between">
+                      <span className="text-on-surface-variant text-label-md">Full Name</span>
+                      <span className="font-body-md text-on-surface">{selectedUser.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-on-surface-variant text-label-md">Email</span>
+                      <span className="font-body-md text-on-surface break-all">{selectedUser.email}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-on-surface-variant text-label-md">Role</span>
+                      <RoleBadge role={selectedUser.role} />
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-on-surface-variant text-label-md">Joined</span>
+                      <span className="font-body-md text-on-surface">{formatDate(selectedUser.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Phone Numbers Dropdown Section */}
+                <div className="admin-card !p-md">
+                  <button
+                    onClick={() => setNumbersExpanded(!numbersExpanded)}
+                    className="w-full flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-sm">
+                      <span className="material-symbols-outlined text-primary text-lg">phone_iphone</span>
+                      <h5 className="font-body-md font-semibold text-on-surface">
+                        Phone Numbers ({selectedUser.numbers.length})
+                      </h5>
+                    </div>
+                    <span className={`material-symbols-outlined text-on-surface-variant transition-transform duration-200 ${numbersExpanded ? 'rotate-180' : ''}`}>
+                      expand_more
+                    </span>
+                  </button>
+                  {numbersExpanded && (
+                    <div className="mt-sm space-y-sm">
+                      {selectedUser.numbers.length === 0 ? (
+                        <p className="text-on-surface-variant text-sm italic">No phone numbers assigned.</p>
+                      ) : (
+                        selectedUser.numbers.map((n) => (
+                          <div key={n.id} className="flex items-center justify-between bg-surface-container-low rounded-lg px-sm py-2">
+                            <div>
+                              <span className="font-body-md font-medium text-on-surface">{n.number}</span>
+                              {n.label && <span className="text-on-surface-variant text-xs ml-2">{n.label}</span>}
+                            </div>
+                            <span className={`text-xs font-bold uppercase ${n.active ? 'text-[#00a651]' : 'text-on-surface-variant'}`}>
+                              {n.active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Telegram Section */}
+                <div className="admin-card !p-md">
+                  <div className="flex items-center gap-sm mb-sm">
+                    <span className="material-symbols-outlined text-primary text-lg">send</span>
+                    <h5 className="font-body-md font-semibold text-on-surface">Telegram</h5>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-on-surface-variant text-label-md">Phone</span>
-                    <span className="font-body-md text-on-surface">{selectedUser.phoneNumber || '—'}</span>
+                    <span className="text-on-surface-variant text-label-md">Status</span>
+                    {selectedUser.telegram ? (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-[#00a651] animate-pulse" />
+                        <span className="font-body-md text-on-surface">Linked ({selectedUser.telegram})</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-error" />
+                        <span className="font-body-md text-on-surface-variant">Not linked</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-on-surface-variant text-label-md">Token Balance</span>
-                    <span className="font-body-md font-medium text-on-surface">{selectedUser.tokenBalance.toLocaleString()} coins</span>
+                </div>
+
+                {/* Balance Section */}
+                <div className="admin-card !p-md">
+                  <div className="flex items-center gap-sm mb-sm">
+                    <span className="material-symbols-outlined text-primary text-lg">account_balance_wallet</span>
+                    <h5 className="font-body-md font-semibold text-on-surface">Token Balance</h5>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-on-surface-variant text-label-md">Assigned Numbers</span>
-                    <span className="font-body-md font-medium text-on-surface">{selectedUser.assignedNumbers}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-on-surface-variant text-label-md">Joined</span>
-                    <span className="font-body-md text-on-surface">{formatDate(selectedUser.createdAt)}</span>
-                  </div>
+                  {!editBalance ? (
+                    <div className="flex justify-between items-center">
+                      <span className="text-on-surface-variant text-label-md">Current Balance</span>
+                      <div className="flex items-center gap-sm">
+                        <span className="font-body-md font-bold text-on-surface">{selectedUser.tokenBalance.toLocaleString()} coins</span>
+                        <button
+                          onClick={() => {
+                            setEditBalance(true);
+                            setBalanceInput(String(selectedUser.tokenBalance));
+                            setBalanceMsg(null);
+                          }}
+                          className="admin-action-btn !px-2 !py-1 text-xs"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-sm">
+                      <div className="flex items-center gap-sm">
+                        <input
+                          type="number"
+                          value={balanceInput}
+                          onChange={(e) => setBalanceInput(e.target.value)}
+                          className="flex-1 bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
+                          placeholder="Enter new balance"
+                        />
+                        <button
+                          onClick={handleSaveBalance}
+                          disabled={balanceSaving}
+                          className="admin-action-btn !px-3 !py-1.5 text-xs"
+                        >
+                          {balanceSaving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setEditBalance(false); setBalanceMsg(null); }}
+                          className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {balanceMsg && (
+                        <p className={`text-xs ${balanceMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{balanceMsg}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

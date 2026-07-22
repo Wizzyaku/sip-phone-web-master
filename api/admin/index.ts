@@ -13,7 +13,7 @@ import {
 
 export const config = {
   api: {
-    bodyParser: false,
+    bodyParser: true,
   },
 };
 
@@ -164,7 +164,7 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
   const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
 
   let balanceMap = new Map<string, number>();
-  let numberCountMap = new Map<string, number>();
+  let userNumbersMap = new Map<string, { id: string; number: string; label: string; active: boolean }[]>();
   let activeEmails = new Set<string>();
 
   try {
@@ -180,11 +180,17 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
   try {
     const { data: numbers } = await serverClient
       .from('phone_numbers')
-      .select('user_id')
+      .select('id, number, label, active, user_id')
       .in('user_id', safeIds);
     (numbers || []).forEach((n) => {
       const uid = n.user_id;
-      numberCountMap.set(uid, (numberCountMap.get(uid) || 0) + 1);
+      if (!userNumbersMap.has(uid)) userNumbersMap.set(uid, []);
+      userNumbersMap.get(uid)!.push({
+        id: n.id,
+        number: n.number,
+        label: n.label || '',
+        active: n.active,
+      });
     });
   } catch (e) {
     console.warn('[admin/users] phone_numbers query failed:', (e as Error).message);
@@ -215,7 +221,9 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
     role: p.role || 'user',
     createdAt: p.created_at || null,
     tokenBalance: balanceMap.get(p.id) || 0,
-    assignedNumbers: numberCountMap.get(p.id) || 0,
+    assignedNumbers: (userNumbersMap.get(p.id) || []).length,
+    numbers: userNumbersMap.get(p.id) || [],
+    telegram: p.telegram_username || p.telegram_id || null,
   }));
 
   res.status(200).json({ total, active, admins, suspended, users });
@@ -373,6 +381,41 @@ async function handleSettings(serverClient: ReturnType<typeof supabaseServer>, r
   });
 }
 
+async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { userId, tokens } = req.body || {};
+  if (!userId || typeof tokens !== 'number') {
+    res.status(400).json({ error: 'userId and tokens are required.' });
+    return;
+  }
+
+  const { data: existing } = await serverClient
+    .from('user_balances')
+    .select('id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await serverClient
+      .from('user_balances')
+      .update({ tokens })
+      .eq('id', userId);
+    if (error) {
+      res.status(500).json({ error: 'Failed to update balance: ' + error.message });
+      return;
+    }
+  } else {
+    const { error } = await serverClient
+      .from('user_balances')
+      .insert({ id: userId, tokens });
+    if (error) {
+      res.status(500).json({ error: 'Failed to create balance: ' + error.message });
+      return;
+    }
+  }
+
+  res.status(200).json({ success: true, userId, tokens });
+}
+
 async function handleMessages(res: VercelResponse) {
   const allMessages = await getMessages();
 
@@ -402,7 +445,7 @@ async function handleMessages(res: VercelResponse) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
@@ -410,7 +453,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
@@ -442,6 +485,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         break;
       case 'settings':
         await handleSettings(serverClient, res);
+        break;
+      case 'update-balance':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'update-balance requires POST' });
+          break;
+        }
+        await handleUpdateBalance(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });
