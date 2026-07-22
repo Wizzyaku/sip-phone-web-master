@@ -40,11 +40,21 @@ function StatusBadge({ status }: { status: string }) {
   if (normalized === 'flagged' || normalized === 'error') {
     return <span className="bg-error/10 text-error px-3 py-1 rounded-full text-xs font-bold uppercase">Flagged</span>;
   }
-  return <span className="bg-success/10 text-success px-3 py-1 rounded-full text-xs font-bold uppercase">Success</span>;
+  return <span className="bg-[#00a651]/10 text-[#00a651] px-3 py-1 rounded-full text-xs font-bold uppercase">Success</span>;
 }
 
-const barHeights = ['60%', '45%', '80%', '70%', '90%', '65%', '75%', '85%', '55%', '95%'];
-const barTooltips = ['$12k', '$9.2k', '$16k', '$14k', '$18k', '$13k', '$15k', '$17k', '$11k', '$18.5k'];
+const barData = [
+  { height: '60%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: '$12k' },
+  { height: '45%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '80%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '70%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '90%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '65%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '75%', opacity: 'bg-primary/30', hover: 'hover:bg-primary/50', tooltip: null },
+  { height: '85%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '55%', opacity: 'bg-primary/20', hover: 'hover:bg-primary/40', tooltip: null },
+  { height: '95%', opacity: 'bg-primary/40', hover: 'hover:bg-primary/60', tooltip: '$18.5k' },
+];
 
 export default function AdminOverview() {
   const navigate = useNavigate();
@@ -107,7 +117,7 @@ export default function AdminOverview() {
                 <div className="p-3 bg-primary/10 rounded-xl text-primary">
                   <span className="material-symbols-outlined">group</span>
                 </div>
-                <span className="text-xs font-bold text-success bg-success/10 px-2 py-1 rounded-full">+12.5%</span>
+                <span className="text-xs font-bold text-[#00a651] bg-[#00a651]/10 px-2 py-1 rounded-full">+12.5%</span>
               </div>
               <div>
                 <span className="text-on-surface-variant text-label-md block mb-1">Total Users</span>
@@ -120,7 +130,7 @@ export default function AdminOverview() {
                 <div className="p-3 bg-secondary/10 rounded-xl text-secondary">
                   <span className="material-symbols-outlined">dialer_sip</span>
                 </div>
-                <span className="text-xs font-bold text-success bg-success/10 px-2 py-1 rounded-full">+4.2%</span>
+                <span className="text-xs font-bold text-[#00a651] bg-[#00a651]/10 px-2 py-1 rounded-full">+4.2%</span>
               </div>
               <div>
                 <span className="text-on-surface-variant text-label-md block mb-1">Active Numbers</span>
@@ -133,7 +143,7 @@ export default function AdminOverview() {
                 <div className="p-3 bg-tertiary-container/10 rounded-xl text-tertiary">
                   <span className="material-symbols-outlined">payments</span>
                 </div>
-                <span className="text-xs font-bold text-success bg-success/10 px-2 py-1 rounded-full">+18.3%</span>
+                <span className="text-xs font-bold text-[#00a651] bg-[#00a651]/10 px-2 py-1 rounded-full">+18.3%</span>
               </div>
               <div>
                 <span className="text-on-surface-variant text-label-md block mb-1">Monthly Revenue</span>
@@ -166,15 +176,17 @@ export default function AdminOverview() {
                 </select>
               </div>
               <div className="flex-1 relative w-full flex items-end justify-between gap-base px-4">
-                {barHeights.map((h, i) => (
+                {barData.map((bar, i) => (
                   <div
                     key={i}
-                    className="w-full rounded-t-lg relative group transition-all duration-300 bg-primary/20 hover:bg-primary/40"
-                    style={{ height: h }}
+                    className={`w-full rounded-t-lg relative group transition-all duration-300 ${bar.opacity} ${bar.hover}`}
+                    style={{ height: bar.height }}
                   >
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-on-surface text-white text-xs px-2 py-1 rounded hidden group-hover:block whitespace-nowrap">
-                      {barTooltips[i]}
-                    </div>
+                    {bar.tooltip && (
+                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-on-surface text-white text-xs px-2 py-1 rounded hidden group-hover:block whitespace-nowrap">
+                        {bar.tooltip}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -214,7 +226,7 @@ export default function AdminOverview() {
                     <span className="font-body-md font-semibold">System Status</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-success animate-pulse"></div>
+                    <div className="w-2 h-2 rounded-full bg-[#00a651] animate-pulse"></div>
                     <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
                   </div>
                 </button>
