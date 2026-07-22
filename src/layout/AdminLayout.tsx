@@ -153,10 +153,6 @@ export function AdminLayout() {
           <span className="font-label-sm text-[10px]">More</span>
         </Link>
       </footer>
-
-      <button className="fixed bottom-24 right-8 w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all md:bottom-10 z-30 group">
-        <span className="material-symbols-outlined text-3xl transition-transform group-hover:rotate-90">add</span>
-      </button>
     </div>
   );
 }

@@ -32,6 +32,9 @@ function timeAgo(iso: string): string {
 }
 
 function formatCurrency(value: number, currency: string): string {
+  if (currency === 'NGN') {
+    return `\u20a6${new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)}`;
+  }
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 }
 
@@ -230,16 +233,6 @@ export default function AdminOverview() {
                     <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
                   </div>
                 </button>
-              </div>
-              <div className="mt-md p-sm rounded-xl bg-primary/5 border border-primary/10">
-                <p className="text-xs text-on-surface-variant mb-2 font-medium uppercase tracking-widest">Storage Status</p>
-                <div className="h-2 w-full bg-surface-container-high rounded-full overflow-hidden">
-                  <div className="h-full bg-primary w-[72%]"></div>
-                </div>
-                <div className="flex justify-between mt-2 text-xs font-bold">
-                  <span className="text-on-surface">7.2 TB / 10 TB</span>
-                  <span className="text-primary">72% Used</span>
-                </div>
               </div>
             </div>
           </div>
