@@ -163,6 +163,25 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
   const userIds = profileList.map((p) => p.id);
   const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
 
+  // Fetch emails and created_at from auth.users (not in profiles table)
+  const authMap = new Map<string, { email: string; created_at: string }>();
+  try {
+    const { data: authUsers, error: authError } = await serverClient
+      .from('users')
+      .select('id, email, created_at')
+      .in('id', safeIds);
+
+    if (authError) {
+      console.warn('[admin/users] auth.users query failed:', authError.message);
+    } else {
+      (authUsers || []).forEach((u) => {
+        authMap.set(u.id, { email: u.email || '', created_at: u.created_at || '' });
+      });
+    }
+  } catch (e) {
+    console.warn('[admin/users] auth.users query exception:', (e as Error).message);
+  }
+
   let balanceMap = new Map<string, number>();
   let userNumbersMap = new Map<string, { id: string; number: string; label: string; active: boolean }[]>();
   let activeEmails = new Set<string>();
@@ -210,21 +229,28 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
   const total = profileList.length;
   const admins = profileList.filter((p) => p.role === 'admin').length;
   const suspended = 0;
-  const active = profileList.filter((p) => activeEmails.has(p.email)).length;
+  const active = profileList.filter((p) => {
+    const authData = authMap.get(p.id);
+    return authData && activeEmails.has(authData.email);
+  }).length;
 
-  const users = profileList.map((p) => ({
-    id: p.id,
-    name: p.name || p.email?.split('@')[0] || 'User',
-    email: p.email || '',
-    avatar: p.avatar || '',
-    phoneNumber: p.phone_number || null,
-    role: p.role || 'user',
-    createdAt: p.created_at || null,
-    tokenBalance: balanceMap.get(p.id) || 0,
-    assignedNumbers: (userNumbersMap.get(p.id) || []).length,
-    numbers: userNumbersMap.get(p.id) || [],
-    telegram: p.telegram_username || p.telegram_id || null,
-  }));
+  const users = profileList.map((p) => {
+    const authData = authMap.get(p.id);
+    const email = authData?.email || '';
+    return {
+      id: p.id,
+      name: p.name || email?.split('@')[0] || 'User',
+      email,
+      avatar: p.avatar || '',
+      phoneNumber: p.phone_number || null,
+      role: p.role || 'user',
+      createdAt: authData?.created_at || null,
+      tokenBalance: balanceMap.get(p.id) || 0,
+      assignedNumbers: (userNumbersMap.get(p.id) || []).length,
+      numbers: userNumbersMap.get(p.id) || [],
+      telegram: p.telegram_username || p.telegram_id || null,
+    };
+  });
 
   res.status(200).json({ total, active, admins, suspended, users });
 }
