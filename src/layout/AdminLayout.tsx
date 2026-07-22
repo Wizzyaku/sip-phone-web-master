@@ -6,8 +6,10 @@ const navItems = [
   { icon: 'dashboard', label: 'Dashboard', to: '/admin' },
   { icon: 'phone_iphone', label: 'Phone Numbers', to: '/admin/numbers' },
   { icon: 'chat', label: 'Messages', to: '/admin/messages' },
+  { icon: 'group', label: 'Users', to: '/admin/users' },
   { icon: 'call', label: 'Calls', to: '/admin/calls' },
   { icon: 'payments', label: 'Billing', to: '/admin/payments' },
+  { icon: 'settings', label: 'Settings', to: '/admin/settings' },
 ];
 
 function navClass({ isActive }: { isActive: boolean }) {

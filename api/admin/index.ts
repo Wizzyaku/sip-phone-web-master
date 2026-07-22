@@ -1,6 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabaseServer } from '../../lib/supabase-server.js';
 import { getMessages } from '../../lib/message-store.js';
+import {
+  SMS_COINS_PER_SEGMENT,
+  MMS_COINS_PER_MESSAGE,
+  NUMBER_SUBSCRIPTION_COINS,
+  OUTBOUND_CALL_COINS_PER_SECOND,
+  INBOUND_CALL_COINS_PER_SECOND,
+  CALL_RECORDING_COINS_PER_MINUTE,
+  COINS_PER_USD,
+} from '../../lib/billing.js';
 
 export const config = {
   api: {
@@ -139,6 +148,206 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
   });
 }
 
+async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  const { data: profiles, error: profilesError } = await serverClient
+    .from('profiles')
+    .select('id, name, email, avatar, phone_number, role, created_at')
+    .order('created_at', { ascending: false });
+
+  if (profilesError) {
+    res.status(500).json({ error: 'Failed to fetch users.' });
+    return;
+  }
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const userIds = (profiles || []).map((p) => p.id);
+
+  const [balanceResult, numbersResult, recentSessions] = await Promise.all([
+    serverClient.from('user_balances').select('id, tokens').in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']),
+    serverClient.from('phone_numbers').select('user_id').in('user_id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']),
+    serverClient.from('admin_logs').select('admin_email, created_at').gte('created_at', thirtyDaysAgo),
+  ]);
+
+  const balanceMap = new Map((balanceResult.data || []).map((b) => [b.id, b.tokens || 0]));
+  const numberCountMap = new Map<string, number>();
+  (numbersResult.data || []).forEach((n) => {
+    const uid = n.user_id;
+    numberCountMap.set(uid, (numberCountMap.get(uid) || 0) + 1);
+  });
+  const activeEmails = new Set((recentSessions.data || []).map((s) => s.admin_email));
+
+  const total = (profiles || []).length;
+  const admins = (profiles || []).filter((p) => p.role === 'admin').length;
+  const suspended = 0;
+  const active = (profiles || []).filter((p) => activeEmails.has(p.email)).length;
+
+  const users = (profiles || []).map((p) => ({
+    id: p.id,
+    name: p.name || p.email?.split('@')[0] || 'User',
+    email: p.email || '',
+    avatar: p.avatar || '',
+    phoneNumber: (p as { phone_number?: string }).phone_number || null,
+    role: p.role || 'user',
+    createdAt: p.created_at,
+    tokenBalance: balanceMap.get(p.id) || 0,
+    assignedNumbers: numberCountMap.get(p.id) || 0,
+  }));
+
+  res.status(200).json({ total, active, admins, suspended, users });
+}
+
+async function handleCalls(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  const { data: calls, error: callsError } = await serverClient
+    .from('call_logs')
+    .select('id, user_id, remote_identity, direction, duration_seconds, recorded, created_at')
+    .order('created_at', { ascending: false })
+    .limit(200);
+
+  if (callsError) {
+    res.status(500).json({ error: 'Failed to fetch call logs.' });
+    return;
+  }
+
+  const userIds = [...new Set((calls || []).map((c) => c.user_id))];
+  const { data: users } = await serverClient
+    .from('profiles')
+    .select('id, name, email')
+    .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']);
+
+  const userMap = new Map((users || []).map((u) => [u.id, u]));
+
+  const total = (calls || []).length;
+  const inbound = (calls || []).filter((c) => c.direction === 'incoming').length;
+  const outbound = (calls || []).filter((c) => c.direction === 'outgoing').length;
+  const totalDuration = (calls || []).reduce((sum, c) => sum + (c.duration_seconds || 0), 0);
+
+  const formattedCalls = (calls || []).map((c) => {
+    const user = userMap.get(c.user_id);
+    return {
+      id: c.id,
+      from: c.direction === 'incoming' ? c.remote_identity : 'user',
+      to: c.direction === 'outgoing' ? c.remote_identity : 'user',
+      remoteIdentity: c.remote_identity || '',
+      direction: c.direction === 'incoming' ? 'inbound' : 'outbound',
+      durationSeconds: c.duration_seconds || 0,
+      recorded: c.recorded || false,
+      createdAt: c.created_at,
+      user: user ? user.name || user.email : null,
+    };
+  });
+
+  res.status(200).json({ total, inbound, outbound, totalDuration, calls: formattedCalls });
+}
+
+async function handleBilling(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  const { start: monthStart, end: monthEnd } = getMonthBounds(new Date());
+
+  const [allTxResult, monthTxResult, pendingResult, failedResult] = await Promise.all([
+    serverClient
+      .from('transactions')
+      .select('id, user_id, reference, tokens, amount_minor, currency, provider, status, metadata, created_at')
+      .order('created_at', { ascending: false })
+      .limit(200),
+    serverClient
+      .from('transactions')
+      .select('amount_minor, currency')
+      .in('status', ['success', 'completed'])
+      .gte('created_at', monthStart)
+      .lt('created_at', monthEnd),
+    serverClient.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    serverClient.from('transactions').select('*', { count: 'exact', head: true }).eq('status', 'failed'),
+  ]);
+
+  const userIds = [...new Set((allTxResult.data || []).map((t) => t.user_id))];
+  const { data: users } = await serverClient
+    .from('profiles')
+    .select('id, name, email')
+    .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']);
+
+  const userMap = new Map((users || []).map((u) => [u.id, u]));
+
+  const totalRevenueMinor = (allTxResult.data || [])
+    .filter((t) => t.status === 'success' || t.status === 'completed')
+    .reduce((sum, t) => sum + (t.amount_minor || 0), 0);
+  const monthlyRevenueMinor = (monthTxResult.data || []).reduce((sum, t) => sum + (t.amount_minor || 0), 0);
+  const currency = allTxResult.data?.[0]?.currency || 'NGN';
+
+  const transactions = (allTxResult.data || []).map((t) => {
+    const user = userMap.get(t.user_id);
+    const meta = (t.metadata as Record<string, unknown> | null) || {};
+    return {
+      id: t.id,
+      reference: t.reference || '',
+      user: user ? user.name || user.email : null,
+      amount: t.amount_minor || 0,
+      tokens: t.tokens || 0,
+      currency: t.currency || 'COINS',
+      provider: t.provider || '',
+      type: (meta.type as string) || (meta.billing_type as string) || 'unknown',
+      status: t.status || 'unknown',
+      createdAt: t.created_at,
+    };
+  });
+
+  res.status(200).json({
+    totalRevenue: totalRevenueMinor / 100,
+    monthlyRevenue: monthlyRevenueMinor / 100,
+    pending: pendingResult.count || 0,
+    failed: failedResult.count || 0,
+    currency,
+    transactions,
+  });
+}
+
+async function handleSettings(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  const [numbersResult, callsResult, adminResult] = await Promise.all([
+    serverClient.from('phone_numbers').select('*', { count: 'exact', head: true }),
+    serverClient.from('call_logs').select('*', { count: 'exact', head: true }),
+    serverClient.from('profiles').select('id, name, email, avatar').eq('role', 'admin'),
+  ]);
+
+  let totalMessages = 0;
+  try {
+    const msgs = await getMessages();
+    totalMessages = msgs.length;
+  } catch {
+    // message store may be unavailable
+  }
+
+  const apiStatus = {
+    telnyx: Boolean(process.env.TELNYX_API_KEY),
+    supabase: Boolean(process.env.VITE_SUPABASE_URL || process.env.SUPABASE_SERVICE_ROLE_KEY),
+    upstash: Boolean(process.env.UPSTASH_REDIS_KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL),
+    korapay: Boolean(process.env.KORAPAY_SECRET_KEY),
+  };
+
+  const pricing = {
+    coinsPerUsd: COINS_PER_USD,
+    smsCoinsPerSegment: SMS_COINS_PER_SEGMENT,
+    mmsCoinsPerMessage: MMS_COINS_PER_MESSAGE,
+    numberSubscriptionCoins: NUMBER_SUBSCRIPTION_COINS,
+    outboundCallCoinsPerSecond: OUTBOUND_CALL_COINS_PER_SECOND,
+    inboundCallCoinsPerSecond: INBOUND_CALL_COINS_PER_SECOND,
+    callRecordingCoinsPerMinute: CALL_RECORDING_COINS_PER_MINUTE,
+  };
+
+  const admins = (adminResult.data || []).map((a) => ({
+    id: a.id,
+    name: a.name || a.email?.split('@')[0] || 'Admin',
+    email: a.email || '',
+    avatar: a.avatar || '',
+  }));
+
+  res.status(200).json({
+    totalNumbers: numbersResult.count || 0,
+    totalCalls: callsResult.count || 0,
+    totalMessages,
+    apiStatus,
+    pricing,
+    admins,
+  });
+}
+
 async function handleMessages(res: VercelResponse) {
   const allMessages = await getMessages();
 
@@ -196,6 +405,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         break;
       case 'messages':
         await handleMessages(res);
+        break;
+      case 'users':
+        await handleUsers(serverClient, res);
+        break;
+      case 'calls':
+        await handleCalls(serverClient, res);
+        break;
+      case 'billing':
+        await handleBilling(serverClient, res);
+        break;
+      case 'settings':
+        await handleSettings(serverClient, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });

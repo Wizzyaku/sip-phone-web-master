@@ -29,6 +29,10 @@ const Settings = lazy(() => import('./pages/Settings'));
 const AdminOverview = lazy(() => import('./pages/admin/AdminOverview'));
 const AdminNumbers = lazy(() => import('./pages/admin/AdminNumbers'));
 const AdminMessages = lazy(() => import('./pages/admin/AdminMessages'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminCalls = lazy(() => import('./pages/admin/AdminCalls'));
+const AdminBilling = lazy(() => import('./pages/admin/AdminBilling'));
+const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const pageFallback = (
@@ -147,6 +151,10 @@ const router = createBrowserRouter([
           { index: true, element: <AdminOverview /> },
           { path: 'numbers', element: <AdminNumbers /> },
           { path: 'messages', element: <AdminMessages /> },
+          { path: 'users', element: <AdminUsers /> },
+          { path: 'calls', element: <AdminCalls /> },
+          { path: 'payments', element: <AdminBilling /> },
+          { path: 'settings', element: <AdminSettings /> },
           { path: '*', element: <NotFound /> },
         ],
       },
