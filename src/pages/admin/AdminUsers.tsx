@@ -10,7 +10,7 @@ interface User {
   avatar: string;
   phoneNumber: string | null;
   role: string;
-  createdAt: string;
+  createdAt: string | null;
   tokenBalance: number;
   assignedNumbers: number;
 }
@@ -30,7 +30,8 @@ function RoleBadge({ role }: { role: string }) {
   return <span className="bg-surface-container-high text-on-surface-variant px-3 py-1 rounded-full text-xs font-bold uppercase">User</span>;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
 

@@ -81,7 +81,7 @@ async function handleOverview(serverClient: ReturnType<typeof supabaseServer>, r
   const logs = (logsResult.data || []).map((log) => ({
     id: log.id,
     admin: log.admin_name || log.admin_email || 'Admin',
-    initials: (log.admin_name || log.admin_email || 'A').split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase(),
+    initials: (log.admin_name || log.admin_email || 'A').split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase(),
     action: log.action,
     entity: log.entity || (log.entity_id ? `#${log.entity_id}` : '—'),
     timestamp: log.created_at,
@@ -151,8 +151,7 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
 async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
   const { data: profiles, error: profilesError } = await serverClient
     .from('profiles')
-    .select('*')
-    .order('created_at', { ascending: false });
+    .select('*');
 
   if (profilesError) {
     console.error('[admin/users] profiles query error:', profilesError.message);
@@ -214,7 +213,7 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
     avatar: p.avatar || '',
     phoneNumber: p.phone_number || null,
     role: p.role || 'user',
-    createdAt: p.created_at,
+    createdAt: p.created_at || null,
     tokenBalance: balanceMap.get(p.id) || 0,
     assignedNumbers: numberCountMap.get(p.id) || 0,
   }));
