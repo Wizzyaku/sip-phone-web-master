@@ -32,8 +32,12 @@ function timeAgo(iso: string): string {
 }
 
 function formatCurrency(value: number, currency: string): string {
+  const symbol = currency === 'NGN' ? '\u20a6' : new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(0).replace(/[\d.,]/g, '');
+  if (value >= 1_000_000) {
+    return `${symbol}${(value / 1_000_000).toFixed(2).replace(/\.?0+$/, '')}m`;
+  }
   if (currency === 'NGN') {
-    return `\u20a6${new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)}`;
+    return `${symbol}${new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)}`;
   }
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 }
@@ -202,7 +206,7 @@ export default function AdminOverview() {
 
             <div className="glass-card p-md rounded-xl flex flex-col h-[280px]">
               <h4 className="font-headline-md text-headline-md text-on-surface mb-md">Quick Actions</h4>
-              <div className="space-y-2 flex-1">
+              <div className="space-y-1 flex-1">
                 <button
                   onClick={() => navigate('/admin/users')}
                   className="w-full flex items-center justify-between p-2 rounded-xl bg-white/50 border border-white hover:bg-primary hover:text-white transition-all duration-300 group shadow-sm"
@@ -232,6 +236,16 @@ export default function AdminOverview() {
                     <div className="w-2 h-2 rounded-full bg-[#00a651] animate-pulse"></div>
                     <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
                   </div>
+                </button>
+                <button
+                  onClick={() => navigate('/admin/numbers')}
+                  className="w-full flex items-center justify-between p-2 rounded-xl bg-white/50 border border-white hover:bg-primary hover:text-white transition-all duration-300 group shadow-sm"
+                >
+                  <div className="flex items-center gap-md">
+                    <span className="material-symbols-outlined text-primary group-hover:text-white">phone_iphone</span>
+                    <span className="font-body-md font-semibold">Manage Numbers</span>
+                  </div>
+                  <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
                 </button>
               </div>
             </div>
