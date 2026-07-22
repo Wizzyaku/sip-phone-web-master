@@ -445,29 +445,52 @@ async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServe
 async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
   const { data: numbers, error } = await serverClient
     .from('phone_numbers')
-    .select('id, number, label, flag, features, active, monthly_cost, user_id')
+    .select('*')
     .order('number', { ascending: true });
 
   if (error) {
+    console.error('[admin/available-numbers] query error:', error.message);
     res.status(500).json({ error: 'Failed to fetch numbers: ' + error.message });
     return;
+  }
+
+  console.log('[admin/available-numbers] raw numbers count:', (numbers || []).length);
+  if (numbers && numbers.length > 0) {
+    console.log('[admin/available-numbers] first row keys:', Object.keys(numbers[0]));
+    console.log('[admin/available-numbers] first row sample:', JSON.stringify(numbers[0]));
   }
 
   const userIds = [...new Set((numbers || []).map((n) => n.user_id).filter(Boolean))] as string[];
   let ownerMap = new Map<string, string>();
   if (userIds.length > 0) {
     try {
-      const { data: owners } = await serverClient
-        .from('profiles')
-        .select('id, name, email')
+      const { data: authUsers } = await serverClient
+        .from('users')
+        .select('id, email')
         .in('id', userIds);
-      ownerMap = new Map((owners || []).map((o) => [o.id, o.name || o.email || 'Unknown']));
-    } catch { /* ignore */ }
+      const emailMap = new Map((authUsers || []).map((u) => [u.id, u.email || '']));
+
+      try {
+        const { data: profiles } = await serverClient
+          .from('profiles')
+          .select('id, name')
+          .in('id', userIds);
+        (profiles || []).forEach((p) => {
+          ownerMap.set(p.id, p.name || emailMap.get(p.id) || 'Unknown');
+        });
+      } catch {
+        (authUsers || []).forEach((u) => {
+          ownerMap.set(u.id, u.email || 'Unknown');
+        });
+      }
+    } catch (e) {
+      console.warn('[admin/available-numbers] owner lookup failed:', (e as Error).message);
+    }
   }
 
   const available = (numbers || []).map((n) => ({
     id: n.id,
-    number: n.number,
+    number: n.number || '',
     label: n.label || '',
     flag: n.flag || '🌐',
     features: n.features || [],
