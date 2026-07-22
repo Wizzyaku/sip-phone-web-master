@@ -3,6 +3,16 @@ import axios from 'axios';
 import { supabase } from '../../lib/supabase';
 import { AdminPage } from '../../components/AdminPage';
 
+interface AvailableNumber {
+  id: string;
+  number: string;
+  label: string;
+  flag: string;
+  features: string[];
+  active: boolean;
+  monthlyCost: number;
+}
+
 interface UserNumber {
   id: string;
   number: string;
@@ -57,6 +67,12 @@ export default function AdminUsers() {
   const [balanceInput, setBalanceInput] = useState('');
   const [balanceSaving, setBalanceSaving] = useState(false);
   const [balanceMsg, setBalanceMsg] = useState<string | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [availableNumbers, setAvailableNumbers] = useState<AvailableNumber[]>([]);
+  const [numberSearch, setNumberSearch] = useState('');
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [assignMsg, setAssignMsg] = useState<string | null>(null);
+  const [loadingNumbers, setLoadingNumbers] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -89,12 +105,77 @@ export default function AdminUsers() {
     setNumbersExpanded(false);
     setEditBalance(false);
     setBalanceMsg(null);
+    setShowAssignModal(false);
+    setAssignMsg(null);
     setDrawerOpen(true);
   };
 
   const closeDrawer = () => {
     setDrawerOpen(false);
+    setShowAssignModal(false);
     setTimeout(() => setSelectedUser(null), 300);
+  };
+
+  const loadAvailableNumbers = async () => {
+    setLoadingNumbers(true);
+    setAssignMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) return;
+
+      const res = await axios.get('/api/admin?action=available-numbers', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setAvailableNumbers(res.data.available || []);
+    } catch {
+      setAssignMsg('Failed to load available numbers.');
+    } finally {
+      setLoadingNumbers(false);
+    }
+  };
+
+  const handleAssignNumber = async (numberId: string, number: string) => {
+    if (!selectedUser) return;
+    setAssigningId(numberId);
+    setAssignMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setAssignMsg('No active session.');
+        setAssigningId(null);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=assign-number',
+        { numberId, userId: selectedUser.id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const newNumber: UserNumber = {
+        id: numberId,
+        number,
+        label: availableNumbers.find((n) => n.id === numberId)?.label || '',
+        active: true,
+      };
+
+      setSelectedUser((prev) => prev ? {
+        ...prev,
+        numbers: [...prev.numbers, newNumber],
+        assignedNumbers: prev.assignedNumbers + 1,
+      } : prev);
+
+      setAvailableNumbers((prev) => prev.filter((n) => n.id !== numberId));
+      setAssignMsg(`Number ${number} assigned successfully.`);
+      setNumbersExpanded(true);
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to assign number.';
+      setAssignMsg(message);
+    } finally {
+      setAssigningId(null);
+    }
   };
 
   const handleSaveBalance = async () => {
@@ -402,6 +483,16 @@ export default function AdminUsers() {
                           </div>
                         ))
                       )}
+                      <button
+                        onClick={() => {
+                          setShowAssignModal(true);
+                          loadAvailableNumbers();
+                        }}
+                        className="admin-action-btn w-full !py-2 text-sm flex items-center justify-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-base">add_circle</span>
+                        Assign Number
+                      </button>
                     </div>
                   )}
                 </div>
@@ -482,6 +573,84 @@ export default function AdminUsers() {
                   )}
                 </div>
               </div>
+
+              {/* Assign Number Modal */}
+              {showAssignModal && (
+                <div
+                  className="absolute inset-0 bg-black/40 backdrop-blur-sm z-20 flex items-center justify-center p-4"
+                  onClick={() => setShowAssignModal(false)}
+                >
+                  <div
+                    className="admin-card-lg max-w-sm w-full max-h-[70vh] flex flex-col"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex justify-between items-center mb-sm">
+                      <h5 className="font-headline-md text-headline-md text-on-surface">Assign Number</h5>
+                      <button
+                        onClick={() => setShowAssignModal(false)}
+                        className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors"
+                      >
+                        close
+                      </button>
+                    </div>
+                    <p className="text-on-surface-variant text-xs mb-sm">
+                      Assigning to <span className="font-semibold text-on-surface">{selectedUser.name}</span>
+                    </p>
+                    <div className="relative mb-sm">
+                      <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">
+                        search
+                      </span>
+                      <input
+                        type="text"
+                        value={numberSearch}
+                        onChange={(e) => setNumberSearch(e.target.value)}
+                        placeholder="Search available numbers..."
+                        className="w-full bg-surface-container-low border-none rounded-lg py-2 pl-9 pr-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
+                      />
+                    </div>
+                    {assignMsg && (
+                      <p className={`text-xs mb-sm ${assignMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{assignMsg}</p>
+                    )}
+                    <div className="flex-1 overflow-y-auto space-y-sm">
+                      {loadingNumbers && (
+                        <div className="text-center py-md">
+                          <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                      {!loadingNumbers && availableNumbers.length === 0 && (
+                        <p className="text-on-surface-variant text-sm italic text-center py-md">
+                          No available numbers to assign.
+                        </p>
+                      )}
+                      {!loadingNumbers && availableNumbers
+                        .filter((n) =>
+                          !numberSearch ||
+                          n.number.replace(/\D/g, '').includes(numberSearch.replace(/\D/g, '')) ||
+                          (n.label || '').toLowerCase().includes(numberSearch.toLowerCase())
+                        )
+                        .map((n) => (
+                          <div
+                            key={n.id}
+                            className="flex items-center justify-between bg-surface-container-low rounded-lg px-sm py-2"
+                          >
+                            <div className="min-w-0">
+                              <span className="font-body-md font-medium text-on-surface block truncate">{n.number}</span>
+                              {n.label && <span className="text-on-surface-variant text-xs">{n.label}</span>}
+                            </div>
+                            <button
+                              onClick={() => handleAssignNumber(n.id, n.number)}
+                              disabled={assigningId === n.id}
+                              className="admin-action-btn !px-3 !py-1.5 text-xs shrink-0 ml-2"
+                            >
+                              {assigningId === n.id ? 'Assigning...' : 'Assign'}
+                            </button>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>

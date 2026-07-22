@@ -442,6 +442,68 @@ async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServe
   res.status(200).json({ success: true, userId, tokens });
 }
 
+async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  const { data: numbers, error } = await serverClient
+    .from('phone_numbers')
+    .select('id, number, label, flag, features, active, monthly_cost, user_id')
+    .order('number', { ascending: true });
+
+  if (error) {
+    res.status(500).json({ error: 'Failed to fetch numbers: ' + error.message });
+    return;
+  }
+
+  const available = (numbers || [])
+    .filter((n) => !n.user_id)
+    .map((n) => ({
+      id: n.id,
+      number: n.number,
+      label: n.label || '',
+      flag: n.flag || '🌐',
+      features: n.features || [],
+      active: n.active,
+      monthlyCost: n.monthly_cost || 0,
+    }));
+
+  res.status(200).json({ available, total: available.length });
+}
+
+async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { numberId, userId } = req.body || {};
+  if (!numberId || !userId) {
+    res.status(400).json({ error: 'numberId and userId are required.' });
+    return;
+  }
+
+  const { data: number, error: fetchError } = await serverClient
+    .from('phone_numbers')
+    .select('id, user_id')
+    .eq('id', numberId)
+    .maybeSingle();
+
+  if (fetchError || !number) {
+    res.status(404).json({ error: 'Phone number not found.' });
+    return;
+  }
+
+  if (number.user_id) {
+    res.status(400).json({ error: 'This number is already assigned to a user.' });
+    return;
+  }
+
+  const { error: updateError } = await serverClient
+    .from('phone_numbers')
+    .update({ user_id: userId, active: true })
+    .eq('id', numberId);
+
+  if (updateError) {
+    res.status(500).json({ error: 'Failed to assign number: ' + updateError.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, numberId, userId });
+}
+
 async function handleMessages(res: VercelResponse) {
   const allMessages = await getMessages();
 
@@ -518,6 +580,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         await handleUpdateBalance(serverClient, req, res);
+        break;
+      case 'available-numbers':
+        await handleAvailableNumbers(serverClient, res);
+        break;
+      case 'assign-number':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'assign-number requires POST' });
+          break;
+        }
+        await handleAssignNumber(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });
