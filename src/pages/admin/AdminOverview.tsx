@@ -197,7 +197,7 @@ export default function AdminOverview() {
               </div>
             </div>
 
-            <div className="glass-card p-md rounded-xl flex flex-col">
+            <div className="glass-card p-md rounded-xl flex flex-col h-[280px]">
               <h4 className="font-headline-md text-headline-md text-on-surface mb-md">Quick Actions</h4>
               <div className="space-y-2 flex-1">
                 <button
