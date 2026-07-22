@@ -27,6 +27,7 @@ const Billing = lazy(() => import('./pages/Billing'));
 const Usage = lazy(() => import('./pages/Usage'));
 const Settings = lazy(() => import('./pages/Settings'));
 const AdminOverview = lazy(() => import('./pages/admin/AdminOverview'));
+const AdminNumbers = lazy(() => import('./pages/admin/AdminNumbers'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const pageFallback = (
@@ -143,6 +144,7 @@ const router = createBrowserRouter([
         element: <AdminLayout />,
         children: [
           { index: true, element: <AdminOverview /> },
+          { path: 'numbers', element: <AdminNumbers /> },
           { path: '*', element: <NotFound /> },
         ],
       },
