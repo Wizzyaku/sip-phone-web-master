@@ -149,61 +149,70 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
 }
 
 async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
-  let profilesResult = await serverClient
+  const { data: profiles, error: profilesError } = await serverClient
     .from('profiles')
-    .select('id, name, email, avatar, phone_number, role, created_at')
+    .select('*')
     .order('created_at', { ascending: false });
 
-  if (profilesResult.error && (profilesResult.error.message?.includes('phone_number') || profilesResult.error.code === '42703')) {
-    profilesResult = await serverClient
-      .from('profiles')
-      .select('id, name, email, avatar, role, created_at')
-      .order('created_at', { ascending: false });
-  }
-
-  if (profilesResult.error) {
-    res.status(500).json({ error: 'Failed to fetch users.' });
+  if (profilesError) {
+    console.error('[admin/users] profiles query error:', profilesError.message);
+    res.status(500).json({ error: 'Failed to fetch users: ' + profilesError.message });
     return;
   }
 
-  const profiles = profilesResult.data || [];
-
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const userIds = (profiles || []).map((p) => p.id);
-
+  const profileList = profiles || [];
+  const userIds = profileList.map((p) => p.id);
   const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
 
-  const [balanceResult, numbersResult, recentSessions] = await Promise.all([
-    serverClient.from('user_balances').select('id, tokens').in('id', safeIds).then(
-      (r) => r,
-      () => ({ data: null, error: null } as never)
-    ),
-    serverClient.from('phone_numbers').select('user_id').in('user_id', safeIds),
-    serverClient.from('admin_logs').select('admin_email, created_at').gte('created_at', thirtyDaysAgo).then(
-      (r) => r,
-      () => ({ data: null, error: null } as never)
-    ),
-  ]);
+  let balanceMap = new Map<string, number>();
+  let numberCountMap = new Map<string, number>();
+  let activeEmails = new Set<string>();
 
-  const balanceMap = new Map((balanceResult.data || []).map((b) => [b.id, b.tokens || 0]));
-  const numberCountMap = new Map<string, number>();
-  (numbersResult.data || []).forEach((n) => {
-    const uid = n.user_id;
-    numberCountMap.set(uid, (numberCountMap.get(uid) || 0) + 1);
-  });
-  const activeEmails = new Set((recentSessions.data || []).map((s) => s.admin_email));
+  try {
+    const { data: balances } = await serverClient
+      .from('user_balances')
+      .select('id, tokens')
+      .in('id', safeIds);
+    balanceMap = new Map((balances || []).map((b) => [b.id, b.tokens || 0]));
+  } catch (e) {
+    console.warn('[admin/users] user_balances query failed:', (e as Error).message);
+  }
 
-  const total = (profiles || []).length;
-  const admins = (profiles || []).filter((p) => p.role === 'admin').length;
+  try {
+    const { data: numbers } = await serverClient
+      .from('phone_numbers')
+      .select('user_id')
+      .in('user_id', safeIds);
+    (numbers || []).forEach((n) => {
+      const uid = n.user_id;
+      numberCountMap.set(uid, (numberCountMap.get(uid) || 0) + 1);
+    });
+  } catch (e) {
+    console.warn('[admin/users] phone_numbers query failed:', (e as Error).message);
+  }
+
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: logs } = await serverClient
+      .from('admin_logs')
+      .select('admin_email, created_at')
+      .gte('created_at', thirtyDaysAgo);
+    activeEmails = new Set((logs || []).map((s) => s.admin_email));
+  } catch (e) {
+    console.warn('[admin/users] admin_logs query failed:', (e as Error).message);
+  }
+
+  const total = profileList.length;
+  const admins = profileList.filter((p) => p.role === 'admin').length;
   const suspended = 0;
-  const active = (profiles || []).filter((p) => activeEmails.has(p.email)).length;
+  const active = profileList.filter((p) => activeEmails.has(p.email)).length;
 
-  const users = (profiles || []).map((p) => ({
+  const users = profileList.map((p) => ({
     id: p.id,
     name: p.name || p.email?.split('@')[0] || 'User',
     email: p.email || '',
     avatar: p.avatar || '',
-    phoneNumber: (p as { phone_number?: string }).phone_number || null,
+    phoneNumber: p.phone_number || null,
     role: p.role || 'user',
     createdAt: p.created_at,
     tokenBalance: balanceMap.get(p.id) || 0,
