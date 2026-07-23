@@ -550,6 +550,7 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
 
 async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
   const { numberId, userId, phoneNumber } = req.body || {};
+  console.log('[admin/assign-number] Request body:', { numberId, userId, phoneNumber });
   if ((!numberId && !phoneNumber) || !userId) {
     res.status(400).json({ error: 'numberId or phoneNumber, and userId are required.' });
     return;
@@ -565,13 +566,19 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
 
   // Otherwise, look up by phone number
   if (!existingId && phoneNumber) {
-    const normalized = normalizePhone(phoneNumber);
-    const { data: existing } = await serverClient
+    const digits = phoneNumber.replace(/\D/g, '');
+    console.log('[admin/assign-number] Looking up by digits:', digits);
+    const { data: existing, error: lookupError } = await serverClient
       .from('phone_numbers')
       .select('id')
-      .ilike('number', `%${normalized.replace(/\D/g, '')}%`)
+      .ilike('number', `%${digits}%`)
       .limit(1)
       .maybeSingle();
+
+    if (lookupError) {
+      console.error('[admin/assign-number] Lookup error:', lookupError.message);
+    }
+    console.log('[admin/assign-number] Lookup result:', existing);
     existingId = existing?.id || null;
   }
 
@@ -614,6 +621,7 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
 
 async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
   const { numberId, phoneNumber } = req.body || {};
+  console.log('[admin/unassign-number] Request body:', { numberId, phoneNumber });
   if (!numberId && !phoneNumber) {
     res.status(400).json({ error: 'numberId or phoneNumber is required.' });
     return;
@@ -626,13 +634,21 @@ async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServ
     targetId = numberId;
   }
   if (!targetId && phoneNumber) {
-    const normalized = normalizePhone(phoneNumber);
-    const { data: existing } = await serverClient
+    const digits = phoneNumber.replace(/\D/g, '');
+    console.log('[admin/unassign-number] Looking up by digits:', digits);
+    const { data: existing, error: lookupError } = await serverClient
       .from('phone_numbers')
-      .select('id')
-      .ilike('number', `%${normalized.replace(/\D/g, '')}%`)
+      .select('id, number')
+      .ilike('number', `%${digits}%`)
       .limit(1)
       .maybeSingle();
+
+    if (lookupError) {
+      console.error('[admin/unassign-number] Lookup error:', lookupError.message);
+      res.status(500).json({ error: 'Lookup failed: ' + lookupError.message });
+      return;
+    }
+    console.log('[admin/unassign-number] Lookup result:', existing);
     targetId = existing?.id || null;
   }
 
@@ -647,10 +663,12 @@ async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServ
     .eq('id', targetId);
 
   if (updateError) {
+    console.error('[admin/unassign-number] Update error:', updateError.message);
     res.status(500).json({ error: 'Failed to unassign number: ' + updateError.message });
     return;
   }
 
+  console.log('[admin/unassign-number] Success, unassigned:', targetId);
   res.status(200).json({ success: true, numberId: targetId });
 }
 
