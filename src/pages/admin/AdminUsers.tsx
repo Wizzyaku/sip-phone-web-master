@@ -73,6 +73,7 @@ export default function AdminUsers() {
   const [numberSearch, setNumberSearch] = useState('');
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [assignMsg, setAssignMsg] = useState<string | null>(null);
+  const [unassigningId, setUnassigningId] = useState<string | null>(null);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
 
   useEffect(() => {
@@ -176,6 +177,40 @@ export default function AdminUsers() {
       setAssignMsg(message);
     } finally {
       setAssigningId(null);
+    }
+  };
+
+  const handleUnassignNumber = async (numberId: string) => {
+    if (!selectedUser) return;
+    setUnassigningId(numberId);
+    setAssignMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setAssignMsg('No active session.');
+        setUnassigningId(null);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=unassign-number',
+        { numberId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSelectedUser((prev) => prev ? {
+        ...prev,
+        numbers: prev.numbers.filter((n) => n.id !== numberId),
+        assignedNumbers: prev.assignedNumbers - 1,
+      } : prev);
+
+      setAssignMsg('Number unassigned successfully.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to unassign number.';
+      setAssignMsg(message);
+    } finally {
+      setUnassigningId(null);
     }
   };
 
@@ -314,7 +349,7 @@ export default function AdminUsers() {
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search name, email, phone..."
+                    placeholder="Search name or email..."
                     className="w-full sm:w-56 bg-surface-container-low border-none rounded-lg py-1.5 pl-9 pr-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
                   />
                 </div>
@@ -336,7 +371,6 @@ export default function AdminUsers() {
                     <th className="text-left">User</th>
                     <th className="text-left">Email</th>
                     <th className="text-left">Role</th>
-                    <th className="text-left">Phone</th>
                     <th className="text-left">Joined</th>
                     <th className="text-right">Numbers</th>
                   </tr>
@@ -344,7 +378,7 @@ export default function AdminUsers() {
                 <tbody className="divide-y divide-outline-variant/10">
                   {filteredUsers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center !py-md">
+                      <td colSpan={5} className="text-center !py-md">
                         No users found.
                       </td>
                     </tr>
@@ -369,7 +403,6 @@ export default function AdminUsers() {
                       </td>
                       <td className="text-on-surface-variant text-sm">{u.email}</td>
                       <td><RoleBadge role={u.role} /></td>
-                      <td className="text-on-surface-variant text-sm">{u.phoneNumber || '—'}</td>
                       <td className="text-on-surface-variant text-sm">{formatDate(u.createdAt)}</td>
                       <td className="text-right font-body-md font-medium text-on-surface">{u.assignedNumbers}</td>
                     </tr>
@@ -478,9 +511,18 @@ export default function AdminUsers() {
                               <span className="font-body-md font-medium text-on-surface">{n.number}</span>
                               {n.label && <span className="text-on-surface-variant text-xs ml-2">{n.label}</span>}
                             </div>
-                            <span className={`text-xs font-bold uppercase ${n.active ? 'text-[#00a651]' : 'text-on-surface-variant'}`}>
-                              {n.active ? 'Active' : 'Inactive'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-bold uppercase ${n.active ? 'text-[#00a651]' : 'text-on-surface-variant'}`}>
+                                {n.active ? 'Active' : 'Inactive'}
+                              </span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleUnassignNumber(n.id); }}
+                                disabled={unassigningId === n.id}
+                                className="text-error text-xs hover:underline disabled:opacity-50"
+                              >
+                                {unassigningId === n.id ? 'Removing...' : 'Remove'}
+                              </button>
+                            </div>
                           </div>
                         ))
                       )}

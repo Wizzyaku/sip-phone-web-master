@@ -237,17 +237,18 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
   const users = profileList.map((p) => {
     const authData = authMap.get(p.id);
     const email = authData?.email || '';
+    const userNumbers = userNumbersMap.get(p.id) || [];
     return {
       id: p.id,
       name: p.name || email?.split('@')[0] || 'User',
       email,
       avatar: p.avatar || '',
-      phoneNumber: p.phone_number || null,
+      phoneNumber: userNumbers[0]?.number || null,
       role: p.role || 'user',
       createdAt: authData?.created_at || null,
       tokenBalance: balanceMap.get(p.id) || 0,
-      assignedNumbers: (userNumbersMap.get(p.id) || []).length,
-      numbers: userNumbersMap.get(p.id) || [],
+      assignedNumbers: userNumbers.length,
+      numbers: userNumbers,
       telegram: p.telegram_username || p.telegram_id || null,
     };
   });
@@ -442,37 +443,11 @@ async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServe
   res.status(200).json({ success: true, userId, tokens });
 }
 
-const PHONE_NUMBER_COLUMN_CANDIDATES = ['number', 'phone', 'phone_number', 'tel', 'value', 'num'];
-
-async function getPhoneNumberColumnName(serverClient: ReturnType<typeof supabaseServer>): Promise<string | null> {
-  try {
-    const { data: columns } = await serverClient
-      .from('information_schema.columns')
-      .select('column_name')
-      .eq('table_name', 'phone_numbers')
-      .eq('table_schema', 'public');
-
-    const names = (columns || []).map((c) => c.column_name);
-    const matched = PHONE_NUMBER_COLUMN_CANDIDATES.find((c) => names.includes(c));
-    console.log('[admin/available-numbers] phone_numbers columns:', names, 'matched:', matched);
-    return matched || null;
-  } catch (e) {
-    console.warn('[admin/available-numbers] failed to read columns:', (e as Error).message);
-    return null;
-  }
-}
-
 async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
-  const phoneCol = await getPhoneNumberColumnName(serverClient);
-  if (!phoneCol) {
-    res.status(500).json({ error: 'Could not detect phone number column in phone_numbers table.' });
-    return;
-  }
-
   const { data: numbers, error } = await serverClient
     .from('phone_numbers')
-    .select('*')
-    .order(phoneCol, { ascending: true });
+    .select('id, number, label, flag, features, active, monthly_cost, user_id')
+    .order('number', { ascending: true });
 
   if (error) {
     console.error('[admin/available-numbers] query error:', error.message);
@@ -480,42 +455,27 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
     return;
   }
 
-  console.log('[admin/available-numbers] raw numbers count:', (numbers || []).length);
-  if (numbers && numbers.length > 0) {
-    console.log('[admin/available-numbers] first row sample:', JSON.stringify(numbers[0]));
-  }
-
   const userIds = [...new Set((numbers || []).map((n) => n.user_id).filter(Boolean))] as string[];
   let ownerMap = new Map<string, string>();
   if (userIds.length > 0) {
-    try {
-      const { data: authUsers } = await serverClient
-        .from('users')
-        .select('id, email')
-        .in('id', userIds);
-      const emailMap = new Map((authUsers || []).map((u) => [u.id, u.email || '']));
+    const { data: authUsers } = await serverClient
+      .from('users')
+      .select('id, email')
+      .in('id', userIds);
+    const emailMap = new Map((authUsers || []).map((u) => [u.id, u.email || '']));
 
-      try {
-        const { data: profiles } = await serverClient
-          .from('profiles')
-          .select('id, name')
-          .in('id', userIds);
-        (profiles || []).forEach((p) => {
-          ownerMap.set(p.id, p.name || emailMap.get(p.id) || 'Unknown');
-        });
-      } catch {
-        (authUsers || []).forEach((u) => {
-          ownerMap.set(u.id, u.email || 'Unknown');
-        });
-      }
-    } catch (e) {
-      console.warn('[admin/available-numbers] owner lookup failed:', (e as Error).message);
-    }
+    const { data: profiles } = await serverClient
+      .from('profiles')
+      .select('id, name')
+      .in('id', userIds);
+    (profiles || []).forEach((p) => {
+      ownerMap.set(p.id, p.name || emailMap.get(p.id) || 'Unknown');
+    });
   }
 
   const available = (numbers || []).map((n) => ({
     id: n.id,
-    number: n[phoneCol] || '',
+    number: n.number || '',
     label: n.label || '',
     flag: n.flag || '🌐',
     features: n.features || [],
@@ -534,17 +494,6 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
     return;
   }
 
-  const { data: number, error: fetchError } = await serverClient
-    .from('phone_numbers')
-    .select('id, user_id')
-    .eq('id', numberId)
-    .maybeSingle();
-
-  if (fetchError || !number) {
-    res.status(404).json({ error: 'Phone number not found.' });
-    return;
-  }
-
   const { error: updateError } = await serverClient
     .from('phone_numbers')
     .update({ user_id: userId, active: true })
@@ -556,6 +505,26 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
   }
 
   res.status(200).json({ success: true, numberId, userId });
+}
+
+async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { numberId } = req.body || {};
+  if (!numberId) {
+    res.status(400).json({ error: 'numberId is required.' });
+    return;
+  }
+
+  const { error: updateError } = await serverClient
+    .from('phone_numbers')
+    .update({ user_id: null })
+    .eq('id', numberId);
+
+  if (updateError) {
+    res.status(500).json({ error: 'Failed to unassign number: ' + updateError.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, numberId });
 }
 
 async function handleMessages(res: VercelResponse) {
@@ -644,6 +613,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         await handleAssignNumber(serverClient, req, res);
+        break;
+      case 'unassign-number':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'unassign-number requires POST' });
+          break;
+        }
+        await handleUnassignNumber(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });
