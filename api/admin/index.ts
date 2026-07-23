@@ -163,23 +163,20 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
   const userIds = profileList.map((p) => p.id);
   const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
 
-  // Fetch emails and created_at from auth.users (not in profiles table)
+  // Fetch emails and created_at from auth.users via Admin API
   const authMap = new Map<string, { email: string; created_at: string }>();
   try {
-    const { data: authUsers, error: authError } = await serverClient
-      .from('users')
-      .select('id, email, created_at')
-      .in('id', safeIds);
+    const { data: authData, error: authError } = await serverClient.auth.admin.listUsers();
 
     if (authError) {
-      console.warn('[admin/users] auth.users query failed:', authError.message);
+      console.warn('[admin/users] auth.admin.listUsers failed:', authError.message);
     } else {
-      (authUsers || []).forEach((u) => {
+      (authData.users || []).forEach((u) => {
         authMap.set(u.id, { email: u.email || '', created_at: u.created_at || '' });
       });
     }
   } catch (e) {
-    console.warn('[admin/users] auth.users query exception:', (e as Error).message);
+    console.warn('[admin/users] auth.admin.listUsers exception:', (e as Error).message);
   }
 
   let balanceMap = new Map<string, number>();
