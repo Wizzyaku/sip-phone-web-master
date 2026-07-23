@@ -150,14 +150,15 @@ export default function AdminUsers() {
         return;
       }
 
-      await axios.post(
+      const assignRes = await axios.post(
         '/api/admin?action=assign-number',
         { numberId, phoneNumber: number, userId: selectedUser.id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      const assignedId = assignRes.data?.numberId || numberId;
       const newNumber: UserNumber = {
-        id: numberId,
+        id: assignedId,
         number,
         label: availableNumbers.find((n) => n.id === numberId)?.label || '',
         active: true,
@@ -677,10 +678,10 @@ export default function AdminUsers() {
                             className="flex items-center justify-between bg-surface-container-low rounded-lg px-sm py-2"
                           >
                             <div className="min-w-0 flex-1">
-                              <span className="font-body-md font-medium text-on-surface block truncate">{n.number}</span>
+                              <span className="font-body-md font-bold text-on-surface block" style={{ fontSize: '15px' }}>{n.number || '(no number)'}</span>
                               {n.label && <span className="text-on-surface-variant text-xs">{n.label}</span>}
                               {n.currentOwner && (
-                                <span className="text-xs text-amber-600 ml-1">Owned by {n.currentOwner}</span>
+                                <span className="text-xs text-amber-600 block mt-0.5">Owned by {n.currentOwner}</span>
                               )}
                             </div>
                             <button
