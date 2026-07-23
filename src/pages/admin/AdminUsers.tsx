@@ -599,18 +599,18 @@ export default function AdminUsers() {
               }`}
             >
               {/* Header */}
-              <div className="sticky top-0 bg-surface/95 backdrop-blur-sm border-b border-outline-variant/10 px-md py-md z-10">
-                <div className="flex justify-between items-center mb-sm">
-                  <h4 className="font-headline-md text-headline-md text-on-surface">User Details</h4>
+              <div className="sticky top-0 bg-surface/95 backdrop-blur-sm border-b border-outline-variant/10 px-4 py-3 z-10">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-lg font-semibold text-on-surface">User Details</h4>
                   <button
                     onClick={closeDrawer}
-                    className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors"
+                    className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-xl"
                   >
                     close
                   </button>
                 </div>
-                <div className="flex items-center gap-md">
-                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xl overflow-hidden shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm overflow-hidden shrink-0">
                     {selectedUser.avatar ? (
                       <img src={selectedUser.avatar} alt={selectedUser.name} className="w-full h-full object-cover rounded-full" />
                     ) : (
@@ -618,163 +618,143 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-headline-md text-headline-md text-on-surface truncate">{selectedUser.name}</h3>
-                    <p className="text-on-surface-variant text-sm truncate">{selectedUser.email}</p>
-                    <div className="mt-1"><RoleBadge role={selectedUser.role} /></div>
+                    <h3 className="text-base font-semibold text-on-surface truncate">{selectedUser.name}</h3>
+                    <p className="text-on-surface-variant text-xs truncate">{selectedUser.email}</p>
+                    <div className="mt-0.5"><RoleBadge role={selectedUser.role} /></div>
                   </div>
                 </div>
               </div>
 
               {/* Body sections */}
-              <div className="px-md py-md space-y-md">
-                {/* Profile Details Section */}
-                <div className="admin-card !p-md">
-                  <div className="flex items-center gap-sm mb-sm">
-                    <span className="material-symbols-outlined text-primary text-lg">person</span>
-                    <h5 className="font-body-md font-semibold text-on-surface">Profile Details</h5>
+              <div className="px-4 py-3 space-y-3">
+                {/* Account Section: Profile + Password combined */}
+                <div className="admin-card !p-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-primary text-base">person</span>
+                    <h5 className="text-sm font-semibold text-on-surface">Account</h5>
                   </div>
-                  <div className="space-y-sm">
-                    <div className="flex justify-between">
-                      <span className="text-on-surface-variant text-label-md">Full Name</span>
-                      <span className="font-body-md text-on-surface">{selectedUser.name}</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-on-surface-variant text-xs">Name</span>
+                      <span className="text-on-surface">{selectedUser.name}</span>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-on-surface-variant text-label-md">Email</span>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-on-surface-variant text-xs">Email</span>
                       {!editEmail ? (
-                        <div className="flex items-center gap-sm">
-                          <span className="font-body-md text-on-surface break-all">{selectedUser.email || '—'}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-on-surface text-xs break-all">{selectedUser.email || '—'}</span>
                           <button
                             onClick={() => {
                               setEditEmail(true);
                               setEmailInput(selectedUser.email || '');
                               setEmailMsg(null);
                             }}
-                            className="admin-action-btn !px-2 !py-1 text-xs"
+                            className="admin-action-btn !px-1.5 !py-0.5 text-xs"
                           >
-                            <span className="material-symbols-outlined text-sm">edit</span>
+                            <span className="material-symbols-outlined text-xs">edit</span>
                           </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-sm">
+                        <div className="flex items-center gap-1.5">
                           <input
                             type="email"
                             value={emailInput}
                             onChange={(e) => setEmailInput(e.target.value)}
-                            className="bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none w-48"
+                            className="bg-surface-container-low border-none rounded-md py-1 px-2 text-xs focus:ring-2 focus:ring-primary/20 outline-none w-40"
                             placeholder="new@email.com"
                           />
                           <button
                             onClick={handleSaveEmail}
                             disabled={emailSaving}
-                            className="admin-action-btn !px-3 !py-1.5 text-xs"
+                            className="admin-action-btn !px-2 !py-1 text-xs"
                           >
-                            {emailSaving ? 'Saving...' : 'Save'}
+                            {emailSaving ? '...' : 'Save'}
                           </button>
                           <button
                             onClick={() => { setEditEmail(false); setEmailMsg(null); }}
-                            className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
+                            className="admin-action-btn !px-2 !py-1 text-xs !text-error"
                           >
                             Cancel
                           </button>
                         </div>
                       )}
                     </div>
-                    {emailMsg && !editEmail && (
+                    {emailMsg && (
                       <p className={`text-xs ${emailMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{emailMsg}</p>
                     )}
-                    {emailMsg && editEmail && (
-                      <p className={`text-xs ${emailMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{emailMsg}</p>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-on-surface-variant text-label-md">Role</span>
-                      <RoleBadge role={selectedUser.role} />
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-on-surface-variant text-label-md">Joined</span>
-                      <span className="font-body-md text-on-surface">{formatDate(selectedUser.createdAt)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Password Section */}
-                <div className="admin-card !p-md">
-                  <div className="flex items-center gap-sm mb-sm">
-                    <span className="material-symbols-outlined text-primary text-lg">lock</span>
-                    <h5 className="font-body-md font-semibold text-on-surface">Password</h5>
-                  </div>
-                  {!editPassword ? (
-                    <div className="flex justify-between items-center">
-                      <span className="text-on-surface-variant text-label-md">••••••••</span>
-                      <button
-                        onClick={() => {
-                          setEditPassword(true);
-                          setPasswordInput('');
-                          setPasswordMsg(null);
-                        }}
-                        className="admin-action-btn !px-3 !py-1.5 text-xs"
-                      >
-                        Change Password
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-sm">
-                      <div className="flex items-center gap-sm">
-                        <input
-                          type="password"
-                          value={passwordInput}
-                          onChange={(e) => setPasswordInput(e.target.value)}
-                          className="flex-1 bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
-                          placeholder="New password (min 6 chars)"
-                        />
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-on-surface-variant text-xs">Password</span>
+                      {!editPassword ? (
                         <button
-                          onClick={handleSavePassword}
-                          disabled={passwordSaving}
-                          className="admin-action-btn !px-3 !py-1.5 text-xs"
+                          onClick={() => {
+                            setEditPassword(true);
+                            setPasswordInput('');
+                            setPasswordMsg(null);
+                          }}
+                          className="admin-action-btn !px-2 !py-1 text-xs"
                         >
-                          {passwordSaving ? 'Saving...' : 'Save'}
+                          Change
                         </button>
-                        <button
-                          onClick={() => { setEditPassword(false); setPasswordInput(''); setPasswordMsg(null); }}
-                          className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {passwordMsg && (
-                        <p className={`text-xs ${passwordMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{passwordMsg}</p>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="password"
+                            value={passwordInput}
+                            onChange={(e) => setPasswordInput(e.target.value)}
+                            className="bg-surface-container-low border-none rounded-md py-1 px-2 text-xs focus:ring-2 focus:ring-primary/20 outline-none w-32"
+                            placeholder="Min 6 chars"
+                          />
+                          <button
+                            onClick={handleSavePassword}
+                            disabled={passwordSaving}
+                            className="admin-action-btn !px-2 !py-1 text-xs"
+                          >
+                            {passwordSaving ? '...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setEditPassword(false); setPasswordInput(''); setPasswordMsg(null); }}
+                            className="admin-action-btn !px-2 !py-1 text-xs !text-error"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       )}
                     </div>
-                  )}
-                  {passwordMsg && !editPassword && (
-                    <p className={`text-xs mt-sm ${passwordMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{passwordMsg}</p>
-                  )}
+                    {passwordMsg && (
+                      <p className={`text-xs ${passwordMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{passwordMsg}</p>
+                    )}
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-on-surface-variant text-xs">Joined</span>
+                      <span className="text-on-surface text-xs">{formatDate(selectedUser.createdAt)}</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Phone Numbers Dropdown Section */}
-                <div className="admin-card !p-md">
+                <div className="admin-card !p-sm">
                   <button
                     onClick={() => setNumbersExpanded(!numbersExpanded)}
                     className="w-full flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-sm">
-                      <span className="material-symbols-outlined text-primary text-lg">phone_iphone</span>
-                      <h5 className="font-body-md font-semibold text-on-surface">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-base">phone_iphone</span>
+                      <h5 className="text-sm font-semibold text-on-surface">
                         Phone Numbers ({selectedUser.numbers.length})
                       </h5>
                     </div>
-                    <span className={`material-symbols-outlined text-on-surface-variant transition-transform duration-200 ${numbersExpanded ? 'rotate-180' : ''}`}>
+                    <span className={`material-symbols-outlined text-on-surface-variant transition-transform duration-200 text-lg ${numbersExpanded ? 'rotate-180' : ''}`}>
                       expand_more
                     </span>
                   </button>
                   {numbersExpanded && (
-                    <div className="mt-sm space-y-sm">
+                    <div className="mt-2 space-y-1.5">
                       {selectedUser.numbers.length === 0 ? (
-                        <p className="text-on-surface-variant text-sm italic">No phone numbers assigned.</p>
+                        <p className="text-on-surface-variant text-xs italic">No phone numbers assigned.</p>
                       ) : (
                         selectedUser.numbers.map((n) => (
-                          <div key={n.id} className="flex items-center justify-between bg-surface-container-low rounded-lg px-sm py-2">
+                          <div key={n.id} className="flex items-center justify-between bg-surface-container-low rounded-md px-2 py-1.5">
                             <div>
-                              <span className="font-body-md font-medium text-on-surface">{n.number}</span>
+                              <span className="text-sm font-medium text-on-surface">{n.number}</span>
                               {n.label && <span className="text-on-surface-variant text-xs ml-2">{n.label}</span>}
                             </div>
                             <div className="flex items-center gap-2">
@@ -786,7 +766,7 @@ export default function AdminUsers() {
                                 disabled={unassigningId === n.id}
                                 className="text-error text-xs hover:underline disabled:opacity-50"
                               >
-                                {unassigningId === n.id ? 'Removing...' : 'Remove'}
+                                {unassigningId === n.id ? '...' : 'Remove'}
                               </button>
                             </div>
                           </div>
@@ -797,144 +777,153 @@ export default function AdminUsers() {
                           setShowAssignModal(true);
                           loadAvailableNumbers();
                         }}
-                        className="admin-action-btn w-full !py-2 text-sm flex items-center justify-center gap-1"
+                        className="admin-action-btn w-full !py-1.5 text-xs flex items-center justify-center gap-1"
                       >
-                        <span className="material-symbols-outlined text-base">add_circle</span>
+                        <span className="material-symbols-outlined text-sm">add_circle</span>
                         Assign Number
                       </button>
                     </div>
                   )}
                 </div>
 
-                {/* Telegram Section */}
-                <div className="admin-card !p-md">
-                  <div className="flex items-center gap-sm mb-sm">
-                    <span className="material-symbols-outlined text-primary text-lg">send</span>
-                    <h5 className="font-body-md font-semibold text-on-surface">Telegram</h5>
-                  </div>
-                  {!editTelegram ? (
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        {selectedUser.telegramChatId ? (
-                          <>
-                            <div className="w-2 h-2 rounded-full bg-[#00a651] animate-pulse" />
-                            <span className="font-body-md text-on-surface">Linked ({selectedUser.telegramChatId})</span>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-2 h-2 rounded-full bg-error" />
-                            <span className="font-body-md text-on-surface-variant">Not linked</span>
-                          </>
+                {/* Telegram + Balance combined */}
+                <div className="admin-card !p-sm">
+                  <div className="space-y-2">
+                    {/* Telegram row */}
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary text-base">send</span>
+                          <h5 className="text-sm font-semibold text-on-surface">Telegram</h5>
+                        </div>
+                        {!editTelegram && (
+                          <div className="flex items-center gap-1.5">
+                            {selectedUser.telegramChatId ? (
+                              <>
+                                <div className="w-1.5 h-1.5 rounded-full bg-[#00a651]" />
+                                <span className="text-xs text-on-surface">{selectedUser.telegramChatId}</span>
+                                <button
+                                  onClick={handleUnlinkTelegram}
+                                  disabled={telegramSaving}
+                                  className="text-error text-xs hover:underline disabled:opacity-50"
+                                >
+                                  {telegramSaving ? '...' : 'Unlink'}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditTelegram(true);
+                                    setTelegramInput(selectedUser.telegramChatId || '');
+                                    setTelegramMsg(null);
+                                  }}
+                                  className="admin-action-btn !px-1.5 !py-0.5 text-xs"
+                                >
+                                  <span className="material-symbols-outlined text-xs">edit</span>
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <div className="w-1.5 h-1.5 rounded-full bg-error" />
+                                <span className="text-xs text-on-surface-variant">Not linked</span>
+                                <button
+                                  onClick={() => {
+                                    setEditTelegram(true);
+                                    setTelegramInput('');
+                                    setTelegramMsg(null);
+                                  }}
+                                  className="admin-action-btn !px-2 !py-0.5 text-xs"
+                                >
+                                  Link
+                                </button>
+                              </>
+                            )}
+                          </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-sm">
-                        {selectedUser.telegramChatId && (
+                      {editTelegram && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={telegramInput}
+                            onChange={(e) => setTelegramInput(e.target.value)}
+                            className="flex-1 bg-surface-container-low border-none rounded-md py-1 px-2 text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                            placeholder="Telegram Chat ID (e.g. 123456789)"
+                          />
                           <button
-                            onClick={handleUnlinkTelegram}
+                            onClick={handleSaveTelegram}
                             disabled={telegramSaving}
+                            className="admin-action-btn !px-2 !py-1 text-xs"
+                          >
+                            {telegramSaving ? '...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setEditTelegram(false); setTelegramMsg(null); }}
                             className="admin-action-btn !px-2 !py-1 text-xs !text-error"
                           >
-                            {telegramSaving ? '...' : 'Unlink'}
+                            Cancel
                           </button>
-                        )}
-                        <button
-                          onClick={() => {
-                            setEditTelegram(true);
-                            setTelegramInput(selectedUser.telegramChatId || '');
-                            setTelegramMsg(null);
-                          }}
-                          className="admin-action-btn !px-2 !py-1 text-xs"
-                        >
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-sm">
-                      <div className="flex items-center gap-sm">
-                        <input
-                          type="text"
-                          value={telegramInput}
-                          onChange={(e) => setTelegramInput(e.target.value)}
-                          className="flex-1 bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
-                          placeholder="Enter Telegram Chat ID (e.g. 123456789)"
-                        />
-                        <button
-                          onClick={handleSaveTelegram}
-                          disabled={telegramSaving}
-                          className="admin-action-btn !px-3 !py-1.5 text-xs"
-                        >
-                          {telegramSaving ? 'Saving...' : 'Save'}
-                        </button>
-                        <button
-                          onClick={() => { setEditTelegram(false); setTelegramMsg(null); }}
-                          className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      <p className="text-on-surface-variant text-xs">
-                        Enter the numeric Telegram Chat ID for this user.
-                      </p>
-                    </div>
-                  )}
-                  {telegramMsg && (
-                    <p className={`text-xs mt-sm ${telegramMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{telegramMsg}</p>
-                  )}
-                </div>
-
-                {/* Balance Section */}
-                <div className="admin-card !p-md">
-                  <div className="flex items-center gap-sm mb-sm">
-                    <span className="material-symbols-outlined text-primary text-lg">account_balance_wallet</span>
-                    <h5 className="font-body-md font-semibold text-on-surface">Token Balance</h5>
-                  </div>
-                  {!editBalance ? (
-                    <div className="flex justify-between items-center">
-                      <span className="text-on-surface-variant text-label-md">Current Balance</span>
-                      <div className="flex items-center gap-sm">
-                        <span className="font-body-md font-bold text-on-surface">{selectedUser.tokenBalance.toLocaleString()} coins</span>
-                        <button
-                          onClick={() => {
-                            setEditBalance(true);
-                            setBalanceInput(String(selectedUser.tokenBalance));
-                            setBalanceMsg(null);
-                          }}
-                          className="admin-action-btn !px-2 !py-1 text-xs"
-                        >
-                          <span className="material-symbols-outlined text-sm">edit</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-sm">
-                      <div className="flex items-center gap-sm">
-                        <input
-                          type="number"
-                          value={balanceInput}
-                          onChange={(e) => setBalanceInput(e.target.value)}
-                          className="flex-1 bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
-                          placeholder="Enter new balance"
-                        />
-                        <button
-                          onClick={handleSaveBalance}
-                          disabled={balanceSaving}
-                          className="admin-action-btn !px-3 !py-1.5 text-xs"
-                        >
-                          {balanceSaving ? 'Saving...' : 'Save'}
-                        </button>
-                        <button
-                          onClick={() => { setEditBalance(false); setBalanceMsg(null); }}
-                          className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                      {balanceMsg && (
-                        <p className={`text-xs ${balanceMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{balanceMsg}</p>
+                        </div>
+                      )}
+                      {telegramMsg && (
+                        <p className={`text-xs mt-1 ${telegramMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{telegramMsg}</p>
                       )}
                     </div>
-                  )}
+
+                    {/* Divider */}
+                    <div className="border-t border-outline/10" />
+
+                    {/* Balance row */}
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary text-base">account_balance_wallet</span>
+                          <h5 className="text-sm font-semibold text-on-surface">Token Balance</h5>
+                        </div>
+                        {!editBalance && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-bold text-on-surface">{selectedUser.tokenBalance.toLocaleString()}</span>
+                            <span className="text-xs text-on-surface-variant">coins</span>
+                            <button
+                              onClick={() => {
+                                setEditBalance(true);
+                                setBalanceInput(String(selectedUser.tokenBalance));
+                                setBalanceMsg(null);
+                              }}
+                              className="admin-action-btn !px-1.5 !py-0.5 text-xs"
+                            >
+                              <span className="material-symbols-outlined text-xs">edit</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {editBalance && (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            value={balanceInput}
+                            onChange={(e) => setBalanceInput(e.target.value)}
+                            className="flex-1 bg-surface-container-low border-none rounded-md py-1 px-2 text-xs focus:ring-2 focus:ring-primary/20 outline-none"
+                            placeholder="Enter new balance"
+                          />
+                          <button
+                            onClick={handleSaveBalance}
+                            disabled={balanceSaving}
+                            className="admin-action-btn !px-2 !py-1 text-xs"
+                          >
+                            {balanceSaving ? '...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setEditBalance(false); setBalanceMsg(null); }}
+                            className="admin-action-btn !px-2 !py-1 text-xs !text-error"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                      {balanceMsg && (
+                        <p className={`text-xs mt-1 ${balanceMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{balanceMsg}</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
