@@ -466,6 +466,53 @@ async function handleUpdateTelegram(serverClient: ReturnType<typeof supabaseServ
   }
 }
 
+async function handleUpdateEmail(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { userId, email } = req.body || {};
+  if (!userId || !email || typeof email !== 'string') {
+    res.status(400).json({ error: 'userId and email are required.' });
+    return;
+  }
+
+  const trimmed = email.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    res.status(400).json({ error: 'Invalid email format.' });
+    return;
+  }
+
+  const { data, error } = await serverClient.auth.admin.updateUserById(userId, { email: trimmed });
+
+  if (error) {
+    console.error('[admin/update-email] Error:', error.message);
+    res.status(500).json({ error: 'Failed to update email: ' + error.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, userId, email: data.user?.email || trimmed });
+}
+
+async function handleUpdatePassword(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { userId, password } = req.body || {};
+  if (!userId || !password || typeof password !== 'string') {
+    res.status(400).json({ error: 'userId and password are required.' });
+    return;
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    return;
+  }
+
+  const { error } = await serverClient.auth.admin.updateUserById(userId, { password });
+
+  if (error) {
+    console.error('[admin/update-password] Error:', error.message);
+    res.status(500).json({ error: 'Failed to update password: ' + error.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, userId });
+}
+
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
 
 function normalizePhone(number: string): string {
@@ -800,6 +847,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         await handleUpdateTelegram(serverClient, req, res);
+        break;
+      case 'update-email':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'update-email requires POST' });
+          break;
+        }
+        await handleUpdateEmail(serverClient, req, res);
+        break;
+      case 'update-password':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'update-password requires POST' });
+          break;
+        }
+        await handleUpdatePassword(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });

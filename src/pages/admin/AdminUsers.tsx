@@ -80,6 +80,14 @@ export default function AdminUsers() {
   const [telegramInput, setTelegramInput] = useState('');
   const [telegramSaving, setTelegramSaving] = useState(false);
   const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const [editPassword, setEditPassword] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -339,6 +347,84 @@ export default function AdminUsers() {
     }
   };
 
+  const handleSaveEmail = async () => {
+    if (!selectedUser) return;
+    const trimmed = emailInput.trim();
+    if (!trimmed) {
+      setEmailMsg('Please enter an email address.');
+      return;
+    }
+
+    setEmailSaving(true);
+    setEmailMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setEmailMsg('No active session.');
+        setEmailSaving(false);
+        return;
+      }
+
+      const res = await axios.post(
+        '/api/admin?action=update-email',
+        { userId: selectedUser.id, email: trimmed },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const newEmail = res.data.email || trimmed;
+      setData((prev) => prev ? {
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === selectedUser.id ? { ...u, email: newEmail } : u
+        ),
+      } : prev);
+      setSelectedUser((prev) => prev ? { ...prev, email: newEmail } : prev);
+      setEditEmail(false);
+      setEmailMsg('Email updated successfully.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to update email.';
+      setEmailMsg(message);
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const handleSavePassword = async () => {
+    if (!selectedUser) return;
+    if (passwordInput.length < 6) {
+      setPasswordMsg('Password must be at least 6 characters.');
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setPasswordMsg('No active session.');
+        setPasswordSaving(false);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=update-password',
+        { userId: selectedUser.id, password: passwordInput },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setEditPassword(false);
+      setPasswordInput('');
+      setPasswordMsg('Password updated successfully.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to update password.';
+      setPasswordMsg(message);
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     if (!data) return [];
     return data.users.filter((u) => {
@@ -552,10 +638,53 @@ export default function AdminUsers() {
                       <span className="text-on-surface-variant text-label-md">Full Name</span>
                       <span className="font-body-md text-on-surface">{selectedUser.name}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-on-surface-variant text-label-md">Email</span>
-                      <span className="font-body-md text-on-surface break-all">{selectedUser.email}</span>
+                      {!editEmail ? (
+                        <div className="flex items-center gap-sm">
+                          <span className="font-body-md text-on-surface break-all">{selectedUser.email || '—'}</span>
+                          <button
+                            onClick={() => {
+                              setEditEmail(true);
+                              setEmailInput(selectedUser.email || '');
+                              setEmailMsg(null);
+                            }}
+                            className="admin-action-btn !px-2 !py-1 text-xs"
+                          >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-sm">
+                          <input
+                            type="email"
+                            value={emailInput}
+                            onChange={(e) => setEmailInput(e.target.value)}
+                            className="bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none w-48"
+                            placeholder="new@email.com"
+                          />
+                          <button
+                            onClick={handleSaveEmail}
+                            disabled={emailSaving}
+                            className="admin-action-btn !px-3 !py-1.5 text-xs"
+                          >
+                            {emailSaving ? 'Saving...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setEditEmail(false); setEmailMsg(null); }}
+                            className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
                     </div>
+                    {emailMsg && !editEmail && (
+                      <p className={`text-xs ${emailMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{emailMsg}</p>
+                    )}
+                    {emailMsg && editEmail && (
+                      <p className={`text-xs ${emailMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{emailMsg}</p>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-on-surface-variant text-label-md">Role</span>
                       <RoleBadge role={selectedUser.role} />
@@ -565,6 +694,60 @@ export default function AdminUsers() {
                       <span className="font-body-md text-on-surface">{formatDate(selectedUser.createdAt)}</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Password Section */}
+                <div className="admin-card !p-md">
+                  <div className="flex items-center gap-sm mb-sm">
+                    <span className="material-symbols-outlined text-primary text-lg">lock</span>
+                    <h5 className="font-body-md font-semibold text-on-surface">Password</h5>
+                  </div>
+                  {!editPassword ? (
+                    <div className="flex justify-between items-center">
+                      <span className="text-on-surface-variant text-label-md">••••••••</span>
+                      <button
+                        onClick={() => {
+                          setEditPassword(true);
+                          setPasswordInput('');
+                          setPasswordMsg(null);
+                        }}
+                        className="admin-action-btn !px-3 !py-1.5 text-xs"
+                      >
+                        Change Password
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-sm">
+                      <div className="flex items-center gap-sm">
+                        <input
+                          type="password"
+                          value={passwordInput}
+                          onChange={(e) => setPasswordInput(e.target.value)}
+                          className="flex-1 bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
+                          placeholder="New password (min 6 chars)"
+                        />
+                        <button
+                          onClick={handleSavePassword}
+                          disabled={passwordSaving}
+                          className="admin-action-btn !px-3 !py-1.5 text-xs"
+                        >
+                          {passwordSaving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setEditPassword(false); setPasswordInput(''); setPasswordMsg(null); }}
+                          className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      {passwordMsg && (
+                        <p className={`text-xs ${passwordMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{passwordMsg}</p>
+                      )}
+                    </div>
+                  )}
+                  {passwordMsg && !editPassword && (
+                    <p className={`text-xs mt-sm ${passwordMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{passwordMsg}</p>
+                  )}
                 </div>
 
                 {/* Phone Numbers Dropdown Section */}
