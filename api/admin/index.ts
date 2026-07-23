@@ -443,88 +443,194 @@ async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServe
   res.status(200).json({ success: true, userId, tokens });
 }
 
-async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
-  const { data: numbers, error } = await serverClient
-    .from('phone_numbers')
-    .select('id, number, label, flag, features, active, monthly_cost, user_id')
-    .order('number', { ascending: true });
+const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
 
-  if (error) {
-    console.error('[admin/available-numbers] query error:', error.message);
-    res.status(500).json({ error: 'Failed to fetch numbers: ' + error.message });
+function normalizePhone(number: string): string {
+  const digits = number.replace(/\D/g, '');
+  return digits.startsWith('1') && digits.length === 11 ? `+${digits}` : `+${digits}`;
+}
+
+async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
+  if (!TELNYX_API_KEY) {
+    res.status(500).json({ error: 'Telnyx API key is not configured.' });
     return;
   }
 
-  const userIds = [...new Set((numbers || []).map((n) => n.user_id).filter(Boolean))] as string[];
+  // 1. Fetch ALL numbers from Telnyx (authoritative source)
+  let telnyxNumbers: Array<{ phone_number: string; status: string; features?: string[] }> = [];
+  try {
+    const url = new URL('https://api.telnyx.com/v2/phone_numbers');
+    url.searchParams.set('page[size]', '200');
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${TELNYX_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[admin/available-numbers] Telnyx API error:', data);
+      res.status(500).json({ error: 'Telnyx API request failed: ' + (data?.errors?.[0]?.detail || 'Unknown error') });
+      return;
+    }
+
+    telnyxNumbers = (data?.data as Array<Record<string, unknown>> || []).map((record) => ({
+      phone_number: (record.phone_number as string) || '',
+      status: (record.status as string) || 'active',
+      features: Array.isArray(record.features) ? record.features as string[] : [],
+    }));
+    console.log('[admin/available-numbers] Telnyx returned', telnyxNumbers.length, 'numbers');
+  } catch (err) {
+    console.error('[admin/available-numbers] Telnyx fetch exception:', (err as Error).message);
+    res.status(500).json({ error: 'Failed to fetch numbers from Telnyx: ' + (err as Error).message });
+    return;
+  }
+
+  // 2. Fetch Supabase phone_numbers for assignment info
+  const { data: dbNumbers } = await serverClient
+    .from('phone_numbers')
+    .select('id, number, user_id, label, active');
+
+  // Map: normalized number -> { id, user_id, label, active }
+  const dbMap = new Map<string, { id: string; user_id: string | null; label: string; active: boolean }>();
+  (dbNumbers || []).forEach((n) => {
+    const normalized = normalizePhone(n.number || '');
+    dbMap.set(normalized, { id: n.id, user_id: n.user_id, label: n.label || '', active: n.active });
+  });
+
+  // 3. Fetch owner names for assigned numbers
+  const assignedUserIds = [...new Set([...dbMap.values()].map((v) => v.user_id).filter(Boolean))] as string[];
   let ownerMap = new Map<string, string>();
-  if (userIds.length > 0) {
+  if (assignedUserIds.length > 0) {
     const { data: authUsers } = await serverClient
       .from('users')
       .select('id, email')
-      .in('id', userIds);
+      .in('id', assignedUserIds);
     const emailMap = new Map((authUsers || []).map((u) => [u.id, u.email || '']));
 
     const { data: profiles } = await serverClient
       .from('profiles')
       .select('id, name')
-      .in('id', userIds);
+      .in('id', assignedUserIds);
     (profiles || []).forEach((p) => {
       ownerMap.set(p.id, p.name || emailMap.get(p.id) || 'Unknown');
     });
   }
 
-  const available = (numbers || []).map((n) => ({
-    id: n.id,
-    number: n.number || '',
-    label: n.label || '',
-    flag: n.flag || '🌐',
-    features: n.features || [],
-    active: n.active,
-    monthlyCost: n.monthly_cost || 0,
-    currentOwner: n.user_id ? ownerMap.get(n.user_id) || 'Unknown' : null,
-  }));
+  // 4. Merge: Telnyx numbers + Supabase assignment info
+  const available = telnyxNumbers.map((t) => {
+    const normalized = normalizePhone(t.phone_number);
+    const dbRecord = dbMap.get(normalized);
+    return {
+      id: dbRecord?.id || normalized,
+      number: t.phone_number,
+      label: dbRecord?.label || '',
+      flag: '🌐',
+      features: t.features || [],
+      active: t.status === 'active',
+      monthlyCost: 0,
+      currentOwner: dbRecord?.user_id ? ownerMap.get(dbRecord.user_id) || 'Unknown' : null,
+    };
+  });
 
   res.status(200).json({ available, total: available.length });
 }
 
 async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
-  const { numberId, userId } = req.body || {};
-  if (!numberId || !userId) {
-    res.status(400).json({ error: 'numberId and userId are required.' });
+  const { numberId, userId, phoneNumber } = req.body || {};
+  if ((!numberId && !phoneNumber) || !userId) {
+    res.status(400).json({ error: 'numberId or phoneNumber, and userId are required.' });
     return;
   }
 
-  const { error: updateError } = await serverClient
-    .from('phone_numbers')
-    .update({ user_id: userId, active: true })
-    .eq('id', numberId);
+  // Try to find existing record by ID or by phone number
+  let existingId: string | null = numberId || null;
+  if (!existingId && phoneNumber) {
+    const normalized = normalizePhone(phoneNumber);
+    const { data: existing } = await serverClient
+      .from('phone_numbers')
+      .select('id')
+      .ilike('number', `%${normalized.replace(/\D/g, '')}%`)
+      .limit(1)
+      .maybeSingle();
+    existingId = existing?.id || null;
+  }
 
-  if (updateError) {
-    res.status(500).json({ error: 'Failed to assign number: ' + updateError.message });
+  if (existingId) {
+    // Update existing record
+    const { error: updateError } = await serverClient
+      .from('phone_numbers')
+      .update({ user_id: userId, active: true })
+      .eq('id', existingId);
+
+    if (updateError) {
+      res.status(500).json({ error: 'Failed to assign number: ' + updateError.message });
+      return;
+    }
+  } else if (phoneNumber) {
+    // Create new record for this Telnyx number
+    const { error: insertError } = await serverClient
+      .from('phone_numbers')
+      .insert({
+        number: phoneNumber,
+        user_id: userId,
+        active: true,
+        label: '',
+        flag: '🌐',
+        features: [],
+        monthly_cost: 0,
+      });
+
+    if (insertError) {
+      res.status(500).json({ error: 'Failed to assign number: ' + insertError.message });
+      return;
+    }
+  } else {
+    res.status(404).json({ error: 'Phone number not found.' });
     return;
   }
 
-  res.status(200).json({ success: true, numberId, userId });
+  res.status(200).json({ success: true, numberId: existingId, userId });
 }
 
 async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
-  const { numberId } = req.body || {};
-  if (!numberId) {
-    res.status(400).json({ error: 'numberId is required.' });
+  const { numberId, phoneNumber } = req.body || {};
+  if (!numberId && !phoneNumber) {
+    res.status(400).json({ error: 'numberId or phoneNumber is required.' });
+    return;
+  }
+
+  let targetId = numberId;
+  if (!targetId && phoneNumber) {
+    const normalized = normalizePhone(phoneNumber);
+    const { data: existing } = await serverClient
+      .from('phone_numbers')
+      .select('id')
+      .ilike('number', `%${normalized.replace(/\D/g, '')}%`)
+      .limit(1)
+      .maybeSingle();
+    targetId = existing?.id || null;
+  }
+
+  if (!targetId) {
+    res.status(404).json({ error: 'Phone number not found in database.' });
     return;
   }
 
   const { error: updateError } = await serverClient
     .from('phone_numbers')
     .update({ user_id: null })
-    .eq('id', numberId);
+    .eq('id', targetId);
 
   if (updateError) {
     res.status(500).json({ error: 'Failed to unassign number: ' + updateError.message });
     return;
   }
 
-  res.status(200).json({ success: true, numberId });
+  res.status(200).json({ success: true, numberId: targetId });
 }
 
 async function handleMessages(res: VercelResponse) {

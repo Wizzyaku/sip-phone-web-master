@@ -152,7 +152,7 @@ export default function AdminUsers() {
 
       await axios.post(
         '/api/admin?action=assign-number',
-        { numberId, userId: selectedUser.id },
+        { numberId, phoneNumber: number, userId: selectedUser.id },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -180,7 +180,7 @@ export default function AdminUsers() {
     }
   };
 
-  const handleUnassignNumber = async (numberId: string) => {
+  const handleUnassignNumber = async (numberId: string, phoneNumber: string) => {
     if (!selectedUser) return;
     setUnassigningId(numberId);
     setAssignMsg(null);
@@ -195,7 +195,7 @@ export default function AdminUsers() {
 
       await axios.post(
         '/api/admin?action=unassign-number',
-        { numberId },
+        { numberId, phoneNumber },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -516,7 +516,7 @@ export default function AdminUsers() {
                                 {n.active ? 'Active' : 'Inactive'}
                               </span>
                               <button
-                                onClick={(e) => { e.stopPropagation(); handleUnassignNumber(n.id); }}
+                                onClick={(e) => { e.stopPropagation(); handleUnassignNumber(n.id, n.number); }}
                                 disabled={unassigningId === n.id}
                                 className="text-error text-xs hover:underline disabled:opacity-50"
                               >
