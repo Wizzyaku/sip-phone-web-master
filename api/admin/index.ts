@@ -477,12 +477,22 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
       return;
     }
 
-    telnyxNumbers = (data?.data as Array<Record<string, unknown>> || []).map((record) => ({
-      phone_number: (record.phone_number as string) || '',
+    const rawRecords = (data?.data as Array<Record<string, unknown>>) || [];
+    if (rawRecords.length > 0) {
+      console.log('[admin/available-numbers] Raw Telnyx record sample:', JSON.stringify(rawRecords[0], null, 2));
+    }
+
+    telnyxNumbers = rawRecords.map((record) => ({
+      phone_number:
+        (record.phone_number as string) ||
+        (record.phone_number_e164 as string) ||
+        (record.number as string) ||
+        (record.friendly_name as string) ||
+        '',
       status: (record.status as string) || 'active',
       features: Array.isArray(record.features) ? record.features as string[] : [],
     }));
-    console.log('[admin/available-numbers] Telnyx returned', telnyxNumbers.length, 'numbers');
+    console.log('[admin/available-numbers] Telnyx returned', telnyxNumbers.length, 'numbers; first number value:', telnyxNumbers[0]?.phone_number || '(empty)');
   } catch (err) {
     console.error('[admin/available-numbers] Telnyx fetch exception:', (err as Error).message);
     res.status(500).json({ error: 'Failed to fetch numbers from Telnyx: ' + (err as Error).message });
