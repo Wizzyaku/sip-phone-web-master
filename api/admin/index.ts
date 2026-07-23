@@ -457,7 +457,7 @@ async function handleAvailableNumbers(serverClient: ReturnType<typeof supabaseSe
   }
 
   // 1. Fetch ALL numbers from Telnyx (authoritative source)
-  let telnyxNumbers: Array<{ phone_number: string; status: string; features?: string[] }> = [];
+  let telnyxNumbers: Array<{ phone_number: string; status: string; features?: string[]; phone_type?: string; country?: string }> = [];
   try {
     const url = new URL('https://api.telnyx.com/v2/phone_numbers');
     url.searchParams.set('page[size]', '200');
@@ -662,18 +662,18 @@ async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServ
     return;
   }
 
-  const { error: updateError } = await serverClient
+  const { error: deleteError } = await serverClient
     .from('phone_numbers')
-    .update({ user_id: null })
+    .delete()
     .eq('id', targetId);
 
-  if (updateError) {
-    console.error('[admin/unassign-number] Update error:', updateError.message);
-    res.status(500).json({ error: 'Failed to unassign number: ' + updateError.message });
+  if (deleteError) {
+    console.error('[admin/unassign-number] Delete error:', deleteError.message);
+    res.status(500).json({ error: 'Failed to unassign number: ' + deleteError.message });
     return;
   }
 
-  console.log('[admin/unassign-number] Success, unassigned:', targetId);
+  console.log('[admin/unassign-number] Success, deleted record:', targetId);
   res.status(200).json({ success: true, numberId: targetId });
 }
 
