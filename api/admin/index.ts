@@ -595,7 +595,7 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
     }
   } else if (phoneNumber) {
     // Create new record for this Telnyx number
-    const { error: insertError } = await serverClient
+    const { data: inserted, error: insertError } = await serverClient
       .from('phone_numbers')
       .insert({
         number: phoneNumber,
@@ -605,12 +605,17 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
         flag: '🌐',
         features: [],
         monthly_cost: 0,
-      });
+      })
+      .select('id')
+      .single();
 
     if (insertError) {
+      console.error('[admin/assign-number] Insert error:', insertError.message);
       res.status(500).json({ error: 'Failed to assign number: ' + insertError.message });
       return;
     }
+    existingId = inserted?.id || null;
+    console.log('[admin/assign-number] Inserted new record:', existingId);
   } else {
     res.status(404).json({ error: 'Phone number not found.' });
     return;
