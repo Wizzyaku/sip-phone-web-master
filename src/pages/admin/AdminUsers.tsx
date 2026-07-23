@@ -621,48 +621,57 @@ export default function AdminUsers() {
               {/* Assign Number Modal */}
               {showAssignModal && (
                 <div
-                  className="absolute inset-0 bg-black/40 backdrop-blur-sm z-20 flex items-center justify-center p-4"
+                  className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
                   onClick={() => setShowAssignModal(false)}
                 >
                   <div
-                    className="admin-card-lg max-w-sm w-full max-h-[70vh] flex flex-col"
+                    className="bg-surface rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] flex flex-col overflow-hidden border border-outline/20"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex justify-between items-center mb-sm">
-                      <h5 className="font-headline-md text-headline-md text-on-surface">Assign Number</h5>
+                    {/* Header */}
+                    <div className="flex justify-between items-center px-5 py-4 border-b border-outline/15">
+                      <div>
+                        <h5 className="text-lg font-semibold text-on-surface">Assign Number</h5>
+                        <p className="text-on-surface-variant text-xs mt-0.5">
+                          Assigning to <span className="font-semibold text-on-surface">{selectedUser.name}</span>
+                        </p>
+                      </div>
                       <button
                         onClick={() => setShowAssignModal(false)}
-                        className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors"
+                        className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-xl"
                       >
                         close
                       </button>
                     </div>
-                    <p className="text-on-surface-variant text-xs mb-sm">
-                      Assigning to <span className="font-semibold text-on-surface">{selectedUser.name}</span>
-                    </p>
-                    <div className="relative mb-sm">
-                      <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">
-                        search
-                      </span>
-                      <input
-                        type="text"
-                        value={numberSearch}
-                        onChange={(e) => setNumberSearch(e.target.value)}
-                        placeholder="Search available numbers..."
-                        className="w-full bg-surface-container-low border-none rounded-lg py-2 pl-9 pr-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
+
+                    {/* Search */}
+                    <div className="px-5 py-3 border-b border-outline/10">
+                      <div className="relative">
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-lg">
+                          search
+                        </span>
+                        <input
+                          type="text"
+                          value={numberSearch}
+                          onChange={(e) => setNumberSearch(e.target.value)}
+                          placeholder="Search numbers..."
+                          className="w-full bg-surface-container-low border border-outline/15 rounded-xl py-2.5 pl-10 pr-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary/30 outline-none transition-all"
+                        />
+                      </div>
+                      {assignMsg && (
+                        <p className={`text-xs mt-2 ${assignMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{assignMsg}</p>
+                      )}
                     </div>
-                    {assignMsg && (
-                      <p className={`text-xs mb-sm ${assignMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{assignMsg}</p>
-                    )}
-                    <div className="flex-1 overflow-y-auto space-y-sm">
+
+                    {/* Number list */}
+                    <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
                       {loadingNumbers && (
-                        <div className="text-center py-md">
+                        <div className="text-center py-8">
                           <div className="inline-block w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                         </div>
                       )}
                       {!loadingNumbers && availableNumbers.length === 0 && (
-                        <p className="text-on-surface-variant text-sm italic text-center py-md">
+                        <p className="text-on-surface-variant text-sm italic text-center py-8">
                           No numbers found on the platform.
                         </p>
                       )}
@@ -675,21 +684,29 @@ export default function AdminUsers() {
                         .map((n) => (
                           <div
                             key={n.id}
-                            className="flex items-center justify-between bg-surface-container-low rounded-lg px-sm py-2"
+                            className="flex items-center justify-between bg-surface-container-low hover:bg-surface-container transition-colors rounded-xl px-4 py-3 border border-outline/10"
                           >
                             <div className="min-w-0 flex-1">
-                              <span className="font-body-md font-bold text-on-surface block" style={{ fontSize: '15px' }}>{n.number || '(no number)'}</span>
-                              {n.label && <span className="text-on-surface-variant text-xs">{n.label}</span>}
-                              {n.currentOwner && (
-                                <span className="text-xs text-amber-600 block mt-0.5">Owned by {n.currentOwner}</span>
-                              )}
+                              <span className="text-sm font-semibold text-on-surface block">{n.number || '(no number)'}</span>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {n.label && (
+                                  <span className="text-on-surface-variant text-xs capitalize">{n.label}</span>
+                                )}
+                                {n.currentOwner && (
+                                  <span className="text-xs text-amber-600 font-medium">Owned by {n.currentOwner}</span>
+                                )}
+                              </div>
                             </div>
                             <button
                               onClick={() => handleAssignNumber(n.id, n.number)}
                               disabled={assigningId === n.id}
-                              className="admin-action-btn !px-3 !py-1.5 text-xs shrink-0 ml-2"
+                              className={`shrink-0 ml-3 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-50 ${
+                                n.currentOwner
+                                  ? 'bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border border-amber-500/30'
+                                  : 'bg-primary text-on-primary hover:bg-primary/90 shadow-sm'
+                              }`}
                             >
-                              {assigningId === n.id ? 'Assigning...' : n.currentOwner ? 'Reassign' : 'Assign'}
+                              {assigningId === n.id ? '...' : n.currentOwner ? 'Reassign' : 'Assign'}
                             </button>
                           </div>
                         ))
