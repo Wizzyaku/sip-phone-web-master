@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
-export type AuthMode = 'login' | 'signup';
-export type AuthStep = 'form' | 'otp';
+export type AuthMode = 'login' | 'signup' | 'reset';
+export type AuthStep = 'form' | 'otp' | 'new-password';
 
 interface AuthModalState {
   isOpen: boolean;

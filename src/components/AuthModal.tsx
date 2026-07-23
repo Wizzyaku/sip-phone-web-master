@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X, Mail, Lock, User, ArrowRight, ArrowLeft, Loader2,
-  Eye, EyeOff
+  Eye, EyeOff, CheckCircle2
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { supabase } from '../lib/supabase';
 import { useAuthModal } from '../store/authModalStore';
 import { cn } from '../lib/utils';
+
+const OTP_API = '/api/auth/otp';
 
 function getPasswordStrength(password: string): number {
   let score = 0;
@@ -20,11 +22,16 @@ function getPasswordStrength(password: string): number {
 const strengthLabels = ['Too short', 'Weak', 'Fair', 'Strong'];
 const strengthColors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
 
-function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; email: string }) {
+function OTPInput({ onComplete, onResend, email, purpose, loading }: {
+  onComplete: (code: string) => void;
+  onResend: () => Promise<void>;
+  email: string;
+  purpose: 'signup' | 'reset';
+  loading: boolean;
+}) {
   const [digits, setDigits] = useState(['', '', '', '', '', '']);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [resendTimer, setResendTimer] = useState(60);
+  const [resending, setResending] = useState(false);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -42,14 +49,13 @@ function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; e
     const newDigits = [...digits];
     newDigits[index] = value;
     setDigits(newDigits);
-    setError(null);
 
     if (value && index < 5) {
       inputsRef.current[index + 1]?.focus();
     }
 
     if (newDigits.every((d) => d !== '')) {
-      verifyOtp(newDigits.join(''));
+      onComplete(newDigits.join(''));
     }
   };
 
@@ -65,55 +71,20 @@ function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; e
     if (pasted.length === 6) {
       const newDigits = pasted.split('');
       setDigits(newDigits);
-      verifyOtp(pasted);
-    }
-  };
-
-  const verifyOtp = async (code: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: 'signup',
-      });
-
-      if (verifyError) {
-        setError(verifyError.message);
-        setDigits(['', '', '', '', '', '']);
-        inputsRef.current[0]?.focus();
-        return;
-      }
-
-      onComplete(code);
-    } catch {
-      setError('Failed to verify code. Please try again.');
-      setDigits(['', '', '', '', '', '']);
-      inputsRef.current[0]?.focus();
-    } finally {
-      setLoading(false);
+      onComplete(pasted);
     }
   };
 
   const handleResend = async () => {
-    if (resendTimer > 0) return;
-    setLoading(true);
-    setError(null);
+    if (resendTimer > 0 || resending) return;
+    setResending(true);
     try {
-      const { error: resendError } = await supabase.auth.resend({
-        type: 'signup',
-        email,
-      });
-      if (resendError) {
-        setError(resendError.message);
-      } else {
-        setResendTimer(60);
-        setDigits(['', '', '', '', '', '']);
-        inputsRef.current[0]?.focus();
-      }
+      await onResend();
+      setResendTimer(60);
+      setDigits(['', '', '', '', '', '']);
+      inputsRef.current[0]?.focus();
     } finally {
-      setLoading(false);
+      setResending(false);
     }
   };
 
@@ -130,12 +101,6 @@ function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; e
         </p>
       </div>
 
-      {error && (
-        <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive text-center">
-          {error}
-        </div>
-      )}
-
       <div className="flex justify-center gap-2 sm:gap-3" onPaste={handlePaste}>
         {digits.map((digit, i) => (
           <input
@@ -147,14 +112,14 @@ function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; e
             value={digit}
             onChange={(e) => handleChange(i, e.target.value)}
             onKeyDown={(e) => handleKeyDown(i, e)}
-            disabled={loading}
+            disabled={loading || resending}
             className={cn(
               'h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 text-center text-xl font-bold transition-all',
               'focus:outline-none focus:ring-2 focus:ring-primary/20',
               digit
                 ? 'border-primary bg-primary/5 text-primary'
                 : 'border-input bg-background text-foreground',
-              loading && 'opacity-50'
+              (loading || resending) && 'opacity-50'
             )}
           />
         ))}
@@ -163,7 +128,7 @@ function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; e
       {loading && (
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Verifying...
+          {purpose === 'signup' ? 'Creating your account...' : 'Verifying code...'}
         </div>
       )}
 
@@ -172,10 +137,10 @@ function OTPInput({ onComplete, email }: { onComplete: (code: string) => void; e
           Didn't receive a code?{' '}
           <button
             onClick={handleResend}
-            disabled={resendTimer > 0 || loading}
+            disabled={resendTimer > 0 || loading || resending}
             className="font-semibold text-primary hover:underline disabled:opacity-50 disabled:no-underline"
           >
-            {resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend code'}
+            {resending ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend code'}
           </button>
         </p>
       </div>
@@ -189,10 +154,15 @@ export function AuthModal() {
   const [fullName, setFullName] = useState('');
   const [loginEmail, setLoginEmail] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [otpCode, setOtpCode] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const strength = getPasswordStrength(password);
@@ -200,6 +170,7 @@ export function AuthModal() {
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      setSuccess(null);
       setPassword('');
     }
   }, [isOpen, mode]);
@@ -260,26 +231,16 @@ export function AuthModal() {
     }
     setLoading(true);
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email: signupEmail.trim(),
-        password,
-        options: {
-          data: {
-            full_name: fullName.trim(),
-          },
-        },
+      const res = await fetch(OTP_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', email: signupEmail.trim(), purpose: 'signup' }),
       });
-
-      if (signUpError) {
-        setError(signUpError.message);
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to send verification code.');
         return;
       }
-
-      if (data.user && data.user.identities && data.user.identities.length === 0) {
-        setError('An account with this email already exists. Please log in.');
-        return;
-      }
-
       setEmail(signupEmail.trim());
       setStep('otp');
     } catch {
@@ -289,13 +250,152 @@ export function AuthModal() {
     }
   };
 
-  const handleOtpComplete = useCallback(() => {
-    close();
-    window.location.href = '/dashboard';
-  }, [close]);
+  const handleSignupOtpComplete = useCallback(async (code: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(OTP_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'signup',
+          email,
+          code,
+          password,
+          name: fullName.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to create account.');
+        return;
+      }
+      setSuccess('Account created successfully! You can now sign in.');
+      setMode('login');
+      setStep('form');
+      setLoginEmail(email);
+      setPassword('');
+      setFullName('');
+      setSignupEmail('');
+    } catch {
+      setError('Failed to verify code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [email, password, fullName, setMode, setStep, setLoginEmail]);
+
+  const handleResendSignup = async () => {
+    setError(null);
+    const res = await fetch(OTP_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send', email, purpose: 'signup' }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || 'Failed to resend code.');
+      throw new Error(data.error);
+    }
+  };
+
+  const handleResetSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!resetEmail.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(OTP_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', email: resetEmail.trim(), purpose: 'reset' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to send reset code.');
+        return;
+      }
+      setEmail(resetEmail.trim());
+      setStep('otp');
+    } catch {
+      setError('An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetOtpComplete = useCallback(async (code: string) => {
+    setOtpCode(code);
+    setStep('new-password');
+  }, [setStep]);
+
+  const handleResendReset = async () => {
+    setError(null);
+    const res = await fetch(OTP_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send', email, purpose: 'reset' }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || 'Failed to resend code.');
+      throw new Error(data.error);
+    }
+  };
+
+  const handleResetConfirm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!newPassword.trim() || !confirmPassword.trim()) {
+      setError('Please fill in both password fields.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(OTP_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reset',
+          email,
+          code: otpCode,
+          newPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Failed to reset password.');
+        return;
+      }
+      setSuccess('Password reset successfully! You can now sign in.');
+      setMode('login');
+      setStep('form');
+      setLoginEmail(email);
+      setPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setOtpCode('');
+      setResetEmail('');
+    } catch {
+      setError('An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const switchMode = (newMode: 'login' | 'signup') => {
     setError(null);
+    setSuccess(null);
     setPassword('');
     setMode(newMode);
   };
@@ -303,6 +403,7 @@ export function AuthModal() {
   const handleBack = () => {
     setStep('form');
     setPassword('');
+    setError(null);
   };
 
   if (!isOpen) return null;
@@ -345,8 +446,16 @@ export function AuthModal() {
           </div>
 
           <div className="px-6 pb-6 pt-1">
-            {/* OTP Step */}
-            {step === 'otp' ? (
+            {/* Success message */}
+            {success && (
+              <div className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 flex items-center gap-2 mb-4">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                {success}
+              </div>
+            )}
+
+            {/* OTP Step (signup) */}
+            {step === 'otp' && mode === 'signup' ? (
               <div>
                 <button
                   onClick={handleBack}
@@ -355,7 +464,123 @@ export function AuthModal() {
                   <ArrowLeft className="h-4 w-4" />
                   Back
                 </button>
-                <OTPInput onComplete={handleOtpComplete} email={email} />
+                {error && (
+                  <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive text-center mb-4">
+                    {error}
+                  </div>
+                )}
+                <OTPInput
+                  onComplete={handleSignupOtpComplete}
+                  onResend={handleResendSignup}
+                  email={email}
+                  purpose="signup"
+                  loading={loading}
+                />
+              </div>
+            ) : step === 'otp' && mode === 'reset' ? (
+              <div>
+                <button
+                  onClick={handleBack}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4 transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+                {error && (
+                  <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive text-center mb-4">
+                    {error}
+                  </div>
+                )}
+                <OTPInput
+                  onComplete={handleResetOtpComplete}
+                  onResend={handleResendReset}
+                  email={email}
+                  purpose="reset"
+                  loading={loading}
+                />
+              </div>
+            ) : step === 'new-password' ? (
+              /* New Password Step (reset) */
+              <div className="space-y-4">
+                <button
+                  onClick={() => { setStep('otp'); setError(null); }}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Set new password</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Enter your new password below.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                <form onSubmit={handleResetConfirm} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-muted-foreground">New Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="At least 8 characters"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="pl-10 pr-10 h-10 rounded-xl"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {newPassword.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={cn('h-full transition-all', strengthColors[getPasswordStrength(newPassword)])}
+                            style={{ width: `${(getPasswordStrength(newPassword) / 3) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-muted-foreground">{strengthLabels[getPasswordStrength(newPassword)]}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-muted-foreground">Confirm Password</label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Re-enter new password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="pl-10 h-10 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-10 rounded-xl text-base font-semibold shadow-lg shadow-primary/20"
+                    disabled={loading}
+                  >
+                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Reset Password
+                    {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
+                  </Button>
+                </form>
               </div>
             ) : mode === 'login' ? (
               /* Login Form */
@@ -390,7 +615,16 @@ export function AuthModal() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-medium text-muted-foreground">Password</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-muted-foreground">Password</label>
+                      <button
+                        type="button"
+                        onClick={() => { setMode('reset'); setError(null); setSuccess(null); }}
+                        className="text-xs font-semibold text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -458,6 +692,59 @@ export function AuthModal() {
                     className="font-semibold text-primary hover:underline"
                   >
                     Sign up
+                  </button>
+                </p>
+              </div>
+            ) : mode === 'reset' ? (
+              /* Reset Password Form */
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-xl font-bold text-foreground">Reset password</h2>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Enter your email and we'll send you a verification code.
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                <form onSubmit={handleResetSend} className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-muted-foreground">Email</label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        placeholder="name@company.com"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        className="pl-10 h-10 rounded-xl"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full h-10 rounded-xl text-base font-semibold shadow-lg shadow-primary/20"
+                    disabled={loading}
+                  >
+                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Send Verification Code
+                    {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
+                  </Button>
+                </form>
+
+                <p className="text-center text-sm text-muted-foreground pt-1">
+                  Remember your password?{' '}
+                  <button
+                    onClick={() => switchMode('login')}
+                    className="font-semibold text-primary hover:underline"
+                  >
+                    Sign in
                   </button>
                 </p>
               </div>
