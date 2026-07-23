@@ -33,6 +33,7 @@ interface User {
   assignedNumbers: number;
   numbers: UserNumber[];
   telegram: string | null;
+  telegramChatId: string | null;
 }
 
 interface UsersData {
@@ -75,6 +76,10 @@ export default function AdminUsers() {
   const [assignMsg, setAssignMsg] = useState<string | null>(null);
   const [unassigningId, setUnassigningId] = useState<string | null>(null);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
+  const [editTelegram, setEditTelegram] = useState(false);
+  const [telegramInput, setTelegramInput] = useState('');
+  const [telegramSaving, setTelegramSaving] = useState(false);
+  const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -254,6 +259,83 @@ export default function AdminUsers() {
       setBalanceMsg(message);
     } finally {
       setBalanceSaving(false);
+    }
+  };
+
+  const handleSaveTelegram = async () => {
+    if (!selectedUser) return;
+    const trimmed = telegramInput.trim();
+    if (!trimmed) {
+      setTelegramMsg('Please enter a Telegram Chat ID.');
+      return;
+    }
+
+    setTelegramSaving(true);
+    setTelegramMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setTelegramMsg('No active session.');
+        setTelegramSaving(false);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=update-telegram',
+        { userId: selectedUser.id, chatId: trimmed },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setData((prev) => prev ? {
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === selectedUser.id ? { ...u, telegramChatId: trimmed } : u
+        ),
+      } : prev);
+      setSelectedUser((prev) => prev ? { ...prev, telegramChatId: trimmed } : prev);
+      setEditTelegram(false);
+      setTelegramMsg('Telegram linked successfully.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to link Telegram.';
+      setTelegramMsg(message);
+    } finally {
+      setTelegramSaving(false);
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    if (!selectedUser) return;
+    setTelegramSaving(true);
+    setTelegramMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setTelegramMsg('No active session.');
+        setTelegramSaving(false);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=update-telegram',
+        { userId: selectedUser.id, chatId: null },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setData((prev) => prev ? {
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === selectedUser.id ? { ...u, telegramChatId: null } : u
+        ),
+      } : prev);
+      setSelectedUser((prev) => prev ? { ...prev, telegramChatId: null } : prev);
+      setTelegramMsg('Telegram unlinked successfully.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to unlink Telegram.';
+      setTelegramMsg(message);
+    } finally {
+      setTelegramSaving(false);
     }
   };
 
@@ -547,20 +629,75 @@ export default function AdminUsers() {
                     <span className="material-symbols-outlined text-primary text-lg">send</span>
                     <h5 className="font-body-md font-semibold text-on-surface">Telegram</h5>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-on-surface-variant text-label-md">Status</span>
-                    {selectedUser.telegram ? (
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-[#00a651] animate-pulse" />
-                        <span className="font-body-md text-on-surface">Linked ({selectedUser.telegram})</span>
+                  {!editTelegram ? (
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        {selectedUser.telegramChatId ? (
+                          <>
+                            <div className="w-2 h-2 rounded-full bg-[#00a651] animate-pulse" />
+                            <span className="font-body-md text-on-surface">Linked ({selectedUser.telegramChatId})</span>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-2 h-2 rounded-full bg-error" />
+                            <span className="font-body-md text-on-surface-variant">Not linked</span>
+                          </>
+                        )}
                       </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full bg-error" />
-                        <span className="font-body-md text-on-surface-variant">Not linked</span>
+                      <div className="flex items-center gap-sm">
+                        {selectedUser.telegramChatId && (
+                          <button
+                            onClick={handleUnlinkTelegram}
+                            disabled={telegramSaving}
+                            className="admin-action-btn !px-2 !py-1 text-xs !text-error"
+                          >
+                            {telegramSaving ? '...' : 'Unlink'}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setEditTelegram(true);
+                            setTelegramInput(selectedUser.telegramChatId || '');
+                            setTelegramMsg(null);
+                          }}
+                          className="admin-action-btn !px-2 !py-1 text-xs"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-sm">
+                      <div className="flex items-center gap-sm">
+                        <input
+                          type="text"
+                          value={telegramInput}
+                          onChange={(e) => setTelegramInput(e.target.value)}
+                          className="flex-1 bg-surface-container-low border-none rounded-lg py-1.5 px-3 text-label-md focus:ring-2 focus:ring-primary/20 outline-none"
+                          placeholder="Enter Telegram Chat ID (e.g. 123456789)"
+                        />
+                        <button
+                          onClick={handleSaveTelegram}
+                          disabled={telegramSaving}
+                          className="admin-action-btn !px-3 !py-1.5 text-xs"
+                        >
+                          {telegramSaving ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          onClick={() => { setEditTelegram(false); setTelegramMsg(null); }}
+                          className="admin-action-btn !px-3 !py-1.5 text-xs !text-error"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <p className="text-on-surface-variant text-xs">
+                        Enter the numeric Telegram Chat ID for this user.
+                      </p>
+                    </div>
+                  )}
+                  {telegramMsg && (
+                    <p className={`text-xs mt-sm ${telegramMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{telegramMsg}</p>
+                  )}
                 </div>
 
                 {/* Balance Section */}

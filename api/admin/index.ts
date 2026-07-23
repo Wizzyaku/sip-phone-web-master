@@ -250,6 +250,7 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
       assignedNumbers: userNumbers.length,
       numbers: userNumbers,
       telegram: p.telegram_username || p.telegram_id || null,
+      telegramChatId: p.telegram_chat_id || null,
     };
   });
 
@@ -441,6 +442,31 @@ async function handleUpdateBalance(serverClient: ReturnType<typeof supabaseServe
   }
 
   res.status(200).json({ success: true, userId, tokens });
+}
+
+async function handleUpdateTelegram(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { userId, chatId } = req.body || {};
+  if (!userId) {
+    res.status(400).json({ error: 'userId is required.' });
+    return;
+  }
+
+  if (chatId === null || chatId === '' || typeof chatId === 'string') {
+    const { error } = await serverClient
+      .from('profiles')
+      .update({ telegram_chat_id: chatId || null })
+      .eq('id', userId);
+
+    if (error) {
+      console.error('[admin/update-telegram] Error:', error.message);
+      res.status(500).json({ error: 'Failed to update Telegram: ' + error.message });
+      return;
+    }
+
+    res.status(200).json({ success: true, userId, telegramChatId: chatId || null });
+  } else {
+    res.status(400).json({ error: 'chatId must be a string or null.' });
+  }
 }
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
@@ -770,6 +796,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         await handleUnassignNumber(serverClient, req, res);
+        break;
+      case 'update-telegram':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'update-telegram requires POST' });
+          break;
+        }
+        await handleUpdateTelegram(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });
