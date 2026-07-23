@@ -556,8 +556,15 @@ async function handleAssignNumber(serverClient: ReturnType<typeof supabaseServer
     return;
   }
 
-  // Try to find existing record by ID or by phone number
-  let existingId: string | null = numberId || null;
+  const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+  // If numberId is a valid UUID, try to update directly
+  let existingId: string | null = null;
+  if (numberId && isUuid(numberId)) {
+    existingId = numberId;
+  }
+
+  // Otherwise, look up by phone number
   if (!existingId && phoneNumber) {
     const normalized = normalizePhone(phoneNumber);
     const { data: existing } = await serverClient
@@ -613,7 +620,12 @@ async function handleUnassignNumber(serverClient: ReturnType<typeof supabaseServ
     return;
   }
 
-  let targetId = numberId;
+  const isUuid = (v: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+  let targetId: string | null = null;
+  if (numberId && isUuid(numberId)) {
+    targetId = numberId;
+  }
   if (!targetId && phoneNumber) {
     const normalized = normalizePhone(phoneNumber);
     const { data: existing } = await serverClient
