@@ -883,6 +883,207 @@ async function handleMessages(res: VercelResponse) {
   res.status(200).json({ total, inbound, outbound, failed, messages });
 }
 
+async function handleTickets(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const status = (req.query.status as string) || null;
+  const category = (req.query.category as string) || null;
+
+  let query = serverClient
+    .from('support_tickets')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+  if (category && category !== 'all') {
+    query = query.eq('category', category);
+  }
+
+  const { data: tickets, error } = await query;
+
+  if (error) {
+    console.error('[admin/tickets] Error:', error.message);
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  // Fetch user names for tickets
+  const userIds = [...new Set((tickets || []).map((t: { user_id: string }) => t.user_id))];
+  let userMap = new Map<string, { name: string; email: string }>();
+  if (userIds.length > 0) {
+    const { data: profiles } = await serverClient
+      .from('profiles')
+      .select('id, name')
+      .in('id', userIds);
+    (profiles || []).forEach((p: { id: string; name: string }) => {
+      userMap.set(p.id, { name: p.name || 'Unknown', email: '' });
+    });
+
+    // Also try to get emails from auth
+    for (const uid of userIds) {
+      const { data: authUser } = await serverClient.auth.admin.getUserById(uid);
+      if (authUser.user?.email) {
+        const existing = userMap.get(uid);
+        if (existing) {
+          existing.email = authUser.user.email;
+          userMap.set(uid, existing);
+        } else {
+          userMap.set(uid, { name: 'Unknown', email: authUser.user.email });
+        }
+      }
+    }
+  }
+
+  const enriched = (tickets || []).map((t: Record<string, unknown>) => {
+    const userInfo = userMap.get(t.user_id as string);
+    return { ...t, user_name: userInfo?.name || 'Unknown', user_email: userInfo?.email || '' };
+  });
+
+  res.status(200).json({ tickets: enriched });
+}
+
+async function handleTicketDetail(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const ticketId = req.query.id as string;
+  if (!ticketId) {
+    res.status(400).json({ error: 'Missing ticket id.' });
+    return;
+  }
+
+  const { data: ticket, error: ticketError } = await serverClient
+    .from('support_tickets')
+    .select('*')
+    .eq('id', ticketId)
+    .maybeSingle();
+
+  if (ticketError || !ticket) {
+    res.status(404).json({ error: 'Ticket not found.' });
+    return;
+  }
+
+  // Get user info
+  let userInfo = { name: 'Unknown', email: '' };
+  const { data: profile } = await serverClient
+    .from('profiles')
+    .select('name')
+    .eq('id', ticket.user_id)
+    .maybeSingle();
+  if (profile?.name) userInfo.name = profile.name;
+
+  const { data: authUser } = await serverClient.auth.admin.getUserById(ticket.user_id);
+  if (authUser.user?.email) userInfo.email = authUser.user.email;
+
+  const { data: replies, error: repliesError } = await serverClient
+    .from('support_ticket_replies')
+    .select('*')
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: true });
+
+  if (repliesError) {
+    console.error('[admin/ticket-detail] Replies error:', repliesError.message);
+  }
+
+  res.status(200).json({ ticket: { ...ticket, user_name: userInfo.name, user_email: userInfo.email }, replies: replies || [] });
+}
+
+async function handleTicketReply(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { ticketId, message } = req.body || {};
+  if (!ticketId || !message) {
+    res.status(400).json({ error: 'ticketId and message are required.' });
+    return;
+  }
+
+  // Get admin user id from token
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const { data: adminData } = await serverClient.auth.getUser(token);
+  if (!adminData.user) {
+    res.status(401).json({ error: 'Unauthorized.' });
+    return;
+  }
+
+  const { data: ticket } = await serverClient
+    .from('support_tickets')
+    .select('id, status')
+    .eq('id', ticketId)
+    .maybeSingle();
+
+  if (!ticket) {
+    res.status(404).json({ error: 'Ticket not found.' });
+    return;
+  }
+
+  if (ticket.status === 'closed') {
+    res.status(400).json({ error: 'Cannot reply to a closed ticket.' });
+    return;
+  }
+
+  const { data: reply, error } = await serverClient
+    .from('support_ticket_replies')
+    .insert({
+      ticket_id: ticketId,
+      user_id: adminData.user.id,
+      author_role: 'admin',
+      message: message.trim(),
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    console.error('[admin/ticket-reply] Error:', error.message);
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  // Update ticket status to pending and bump updated_at
+  await serverClient
+    .from('support_tickets')
+    .update({ status: 'pending', updated_at: new Date().toISOString() })
+    .eq('id', ticketId);
+
+  res.status(200).json({ reply });
+}
+
+async function handleTicketClose(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { ticketId } = req.body || {};
+  if (!ticketId) {
+    res.status(400).json({ error: 'ticketId is required.' });
+    return;
+  }
+
+  const { error } = await serverClient
+    .from('support_tickets')
+    .update({ status: 'closed', updated_at: new Date().toISOString() })
+    .eq('id', ticketId);
+
+  if (error) {
+    console.error('[admin/ticket-close] Error:', error.message);
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, ticketId });
+}
+
+async function handleTicketReopen(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { ticketId } = req.body || {};
+  if (!ticketId) {
+    res.status(400).json({ error: 'ticketId is required.' });
+    return;
+  }
+
+  const { error } = await serverClient
+    .from('support_tickets')
+    .update({ status: 'open', updated_at: new Date().toISOString() })
+    .eq('id', ticketId);
+
+  if (error) {
+    console.error('[admin/ticket-reopen] Error:', error.message);
+    res.status(500).json({ error: error.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, ticketId });
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -984,6 +1185,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         await handleMakeAdmin(serverClient, req, res);
+        break;
+      case 'tickets':
+        await handleTickets(serverClient, req, res);
+        break;
+      case 'ticket-detail':
+        await handleTicketDetail(serverClient, req, res);
+        break;
+      case 'ticket-reply':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'ticket-reply requires POST' });
+          break;
+        }
+        await handleTicketReply(serverClient, req, res);
+        break;
+      case 'ticket-close':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'ticket-close requires POST' });
+          break;
+        }
+        await handleTicketClose(serverClient, req, res);
+        break;
+      case 'ticket-reopen':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'ticket-reopen requires POST' });
+          break;
+        }
+        await handleTicketReopen(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });

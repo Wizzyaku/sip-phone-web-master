@@ -113,6 +113,57 @@ CREATE POLICY "Users can read their own read status" ON message_read_status
   FOR SELECT USING (auth.uid() = user_id);
 ```
 
+### Support tickets tables
+
+Run this in the Supabase SQL editor to enable the support ticket system:
+
+```sql
+CREATE TABLE IF NOT EXISTS public.support_tickets (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  subject text NOT NULL,
+  category text NOT NULL DEFAULT 'general',
+  priority text NOT NULL DEFAULT 'normal',
+  status text NOT NULL DEFAULT 'open',
+  message text NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.support_tickets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read own tickets" ON public.support_tickets
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own tickets" ON public.support_tickets
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own tickets" ON public.support_tickets
+  FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Admins can read all tickets" ON public.support_tickets
+  FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+CREATE POLICY "Admins can update all tickets" ON public.support_tickets
+  FOR UPDATE USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+
+CREATE TABLE IF NOT EXISTS public.support_ticket_replies (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  ticket_id uuid REFERENCES public.support_tickets(id) ON DELETE CASCADE NOT NULL,
+  user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  author_role text NOT NULL DEFAULT 'user',
+  message text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.support_ticket_replies ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read replies on own tickets" ON public.support_ticket_replies
+  FOR SELECT USING (EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()));
+CREATE POLICY "Users can insert replies on own tickets" ON public.support_ticket_replies
+  FOR INSERT WITH CHECK (auth.uid() = user_id AND EXISTS (SELECT 1 FROM public.support_tickets t WHERE t.id = ticket_id AND t.user_id = auth.uid()));
+CREATE POLICY "Admins can read all ticket replies" ON public.support_ticket_replies
+  FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+CREATE POLICY "Admins can insert ticket replies" ON public.support_ticket_replies
+  FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.role = 'admin'));
+```
+
 ### Environment variables
 
 - `RESEND_API_KEY` — Get from [resend.com/api-keys](https://resend.com/api-keys)

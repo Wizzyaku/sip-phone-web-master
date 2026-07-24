@@ -26,6 +26,7 @@ const PhoneNumbers = lazy(() => import('./pages/PhoneNumbers'));
 const Billing = lazy(() => import('./pages/Billing'));
 const Usage = lazy(() => import('./pages/Usage'));
 const Settings = lazy(() => import('./pages/Settings'));
+const Support = lazy(() => import('./pages/Support'));
 const AdminOverview = lazy(() => import('./pages/admin/AdminOverview'));
 const AdminNumbers = lazy(() => import('./pages/admin/AdminNumbers'));
 const AdminMessages = lazy(() => import('./pages/admin/AdminMessages'));
@@ -33,6 +34,7 @@ const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
 const AdminCalls = lazy(() => import('./pages/admin/AdminCalls'));
 const AdminBilling = lazy(() => import('./pages/admin/AdminBilling'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const AdminSupport = lazy(() => import('./pages/admin/AdminSupport'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const pageFallback = (
@@ -135,6 +137,7 @@ const router = createBrowserRouter([
           { path: 'billing', element: <Billing /> },
           { path: 'usage', element: <Usage /> },
           { path: 'settings', element: <Settings /> },
+          { path: 'support', element: <Support /> },
           { path: '*', element: <NotFound /> },
         ],
       },
@@ -155,6 +158,7 @@ const router = createBrowserRouter([
           { path: 'calls', element: <AdminCalls /> },
           { path: 'payments', element: <AdminBilling /> },
           { path: 'settings', element: <AdminSettings /> },
+          { path: 'support', element: <AdminSupport /> },
           { path: '*', element: <NotFound /> },
         ],
       },

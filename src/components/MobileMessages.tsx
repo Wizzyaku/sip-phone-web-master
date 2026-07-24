@@ -337,7 +337,7 @@ export function MobileMessages(props: MobileMessagesProps) {
             </div>
 
             {/* Chat Input Bar */}
-            <div className="shrink-0 bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-3 py-3 pb-8 dark:bg-slate-900/90 dark:border-slate-700/50">
+            <div className="shrink-0 bg-white/90 backdrop-blur-xl border-t border-slate-200/80 px-3 py-3 dark:bg-slate-900/90 dark:border-slate-700/50">
               {props.error && (
                 <div className="mb-2 flex items-center gap-1.5 text-xs text-red-500">
                   <AlertCircle className="w-3.5 h-3.5" />

@@ -43,7 +43,7 @@ export function Layout() {
 
         <div className="flex min-w-0 flex-1 flex-col lg:ml-[280px]">
           <Header onMenuClick={() => setMobileOpen((open) => !open)} />
-          <main className={cn('flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-16 lg:pt-16 pb-[90px] lg:pb-6', mobileOpen && 'overflow-hidden', hideBottomNav && 'pb-6')}>
+          <main className={cn('flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-16 lg:pt-16 pb-[90px] lg:pb-6', mobileOpen && 'overflow-hidden', hideBottomNav && 'pb-0')}>
             <Outlet />
           </main>
           {!mobileOpen && !hideBottomNav && <MobileBottomNav />}

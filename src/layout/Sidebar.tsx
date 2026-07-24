@@ -8,7 +8,7 @@ import {
   CreditCard,
   BarChart3,
   Settings,
-  HelpCircle,
+  LifeBuoy,
   LogOut,
 } from 'lucide-react';
 import { useAppStore, unreadMessages } from '../store/appStore';
@@ -25,6 +25,7 @@ const navItems = [
   { id: 'billing', label: 'Billing & Usage', icon: CreditCard, path: '/billing' },
   { id: 'usage', label: 'Analytics', icon: BarChart3, path: '/usage' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings' },
+  { id: 'support', label: 'Help & Support', icon: LifeBuoy, path: '/support' },
 ] as const;
 
 interface SidebarProps {
@@ -107,17 +108,6 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         >
           Buy Number
         </button>
-        <NavLink
-          to="/settings"
-          onClick={onNavigate}
-          className={cn(
-            'flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100',
-            location.pathname.startsWith('/settings') && 'text-indigo-600 bg-indigo-50 dark:text-indigo-400 dark:bg-indigo-950/40'
-          )}
-        >
-          <HelpCircle className="h-5 w-5" />
-          Help & Support
-        </NavLink>
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-extrabold text-rose-500 transition-colors hover:bg-rose-50 dark:hover:bg-rose-950/30"

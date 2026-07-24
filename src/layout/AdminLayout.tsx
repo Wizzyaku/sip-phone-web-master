@@ -10,6 +10,7 @@ const navItems = [
   { icon: 'group', label: 'Users', to: '/admin/users' },
   { icon: 'call', label: 'Calls', to: '/admin/calls' },
   { icon: 'payments', label: 'Billing', to: '/admin/payments' },
+  { icon: 'support_agent', label: 'Support', to: '/admin/support' },
   { icon: 'settings', label: 'Settings', to: '/admin/settings' },
 ];
 
@@ -199,14 +200,6 @@ function SidebarContent({
 
       {/* Bottom section */}
       <div className="mt-auto pt-3 border-t border-slate-200/80 flex flex-col gap-0.5">
-        <NavLink
-          to="/admin/settings"
-          onClick={onNavigate}
-          className="flex items-center gap-3 py-2.5 px-3 rounded-xl text-[13px] font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-        >
-          <span className="material-symbols-outlined text-lg">help</span>
-          Help & Support
-        </NavLink>
         <button
           onClick={onLogout}
           className="flex items-center gap-3 py-2.5 px-3 rounded-xl text-[13px] font-bold text-rose-500 hover:bg-rose-50 transition-colors"

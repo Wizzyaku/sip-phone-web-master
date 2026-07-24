@@ -414,7 +414,10 @@ export function Messages() {
   ];
 
   return (
-    <div className="relative h-[calc(100vh-154px)] w-full min-w-0 overflow-hidden bg-background md:h-[calc(100vh-7.5rem)] md:rounded-2xl md:border md:border-border/30">
+    <div className={cn(
+      'relative w-full min-w-0 overflow-hidden bg-background md:h-[calc(100vh-7.5rem)] md:rounded-2xl md:border md:border-border/30',
+      activeConversation ? 'h-[calc(100vh-4rem)]' : 'h-[calc(100vh-154px)]'
+    )}>
       {!isDesktop && (
         <div className="absolute inset-0">
         <MobileMessages

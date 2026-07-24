@@ -727,3 +727,96 @@ create policy "Admins can insert admin_logs"
   with check (exists (
     select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
   ));
+
+-- ============================================================
+-- SUPPORT TICKETS
+-- ============================================================
+
+create table if not exists public.support_tickets (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  subject text not null,
+  category text not null default 'general',
+  priority text not null default 'normal',
+  status text not null default 'open',
+  message text not null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.support_tickets enable row level security;
+
+drop policy if exists "Users can read own tickets" on public.support_tickets;
+create policy "Users can read own tickets"
+  on public.support_tickets for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own tickets" on public.support_tickets;
+create policy "Users can insert own tickets"
+  on public.support_tickets for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own tickets" on public.support_tickets;
+create policy "Users can update own tickets"
+  on public.support_tickets for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "Admins can read all tickets" on public.support_tickets;
+create policy "Admins can read all tickets"
+  on public.support_tickets for select
+  using (exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  ));
+
+drop policy if exists "Admins can update all tickets" on public.support_tickets;
+create policy "Admins can update all tickets"
+  on public.support_tickets for update
+  using (exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  ));
+
+create table if not exists public.support_ticket_replies (
+  id uuid default gen_random_uuid() primary key,
+  ticket_id uuid references public.support_tickets(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  author_role text not null default 'user',
+  message text not null,
+  created_at timestamptz default now()
+);
+
+alter table public.support_ticket_replies enable row level security;
+
+drop policy if exists "Users can read replies on own tickets" on public.support_ticket_replies;
+create policy "Users can read replies on own tickets"
+  on public.support_ticket_replies for select
+  using (
+    exists (
+      select 1 from public.support_tickets t
+      where t.id = ticket_id and t.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Users can insert replies on own tickets" on public.support_ticket_replies;
+create policy "Users can insert replies on own tickets"
+  on public.support_ticket_replies for insert
+  with check (
+    auth.uid() = user_id and
+    exists (
+      select 1 from public.support_tickets t
+      where t.id = ticket_id and t.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists "Admins can read all ticket replies" on public.support_ticket_replies;
+create policy "Admins can read all ticket replies"
+  on public.support_ticket_replies for select
+  using (exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  ));
+
+drop policy if exists "Admins can insert ticket replies" on public.support_ticket_replies;
+create policy "Admins can insert ticket replies"
+  on public.support_ticket_replies for insert
+  with check (exists (
+    select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin'
+  ));
