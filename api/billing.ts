@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabaseServer } from '../lib/supabase-server.js';
-import { NUMBER_SUBSCRIPTION_COINS } from '../lib/billing.js';
+import { NUMBER_SUBSCRIPTION_COINS, calculateReserveAmount, calculateCallCost, MIN_CALL_BALANCE } from '../lib/billing.js';
 
-// Combined billing + support endpoint:
+// Combined billing + support + call billing endpoint:
 //   GET  /api/billing?action=wallet        → user wallet balance
 //   GET  /api/billing?action=transactions  → paginated transaction ledger
 //   POST /api/billing?action=subscription  → cron job for subscription renewal
@@ -10,6 +10,8 @@ import { NUMBER_SUBSCRIPTION_COINS } from '../lib/billing.js';
 //   GET  /api/billing?action=ticket-detail → single ticket with replies
 //   POST /api/billing?action=ticket-create → create a support ticket
 //   POST /api/billing?action=ticket-reply  → reply to a support ticket
+//   POST /api/billing?action=call-start    → reserve coins and create call log
+//   POST /api/billing?action=call-end      → settle call billing
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -78,6 +80,257 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.status(200).json({ processed: results.length, results });
+    return;
+  }
+
+  // --- Call Billing (POST, require auth) ---
+  if (action === 'call-start' || action === 'call-end') {
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    const callToken = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!callToken) {
+      res.status(401).json({ error: 'Missing authorization token.' });
+      return;
+    }
+
+    const { data: callUser, error: callAuthError } = await serverClient.auth.getUser(callToken);
+    if (callAuthError || !callUser.user) {
+      res.status(401).json({ error: 'Invalid or expired token.' });
+      return;
+    }
+
+    const callBody = (req.body || {}) as Record<string, unknown>;
+    const direction = (callBody.direction as string) || 'outgoing';
+    const remoteIdentity = (callBody.remoteIdentity as string) || '';
+
+    if (action === 'call-start') {
+      const { data: balanceData } = await serverClient
+        .from('user_balances')
+        .select('tokens')
+        .eq('id', callUser.user.id)
+        .maybeSingle();
+
+      if (!balanceData || Number(balanceData.tokens) < MIN_CALL_BALANCE) {
+        res.status(402).json({
+          error: `Insufficient balance. You need at least ${MIN_CALL_BALANCE} coins to start a call.`,
+          minRequired: MIN_CALL_BALANCE,
+        });
+        return;
+      }
+
+      const reserveAmount = calculateReserveAmount(
+        direction === 'incoming' ? 'incoming' : 'outgoing'
+      );
+
+      let reservedCoins = 0;
+      try {
+        const { data: reserveResult, error: reserveError } = await serverClient.rpc('reserve_coins', {
+          p_user_id: callUser.user.id,
+          p_coins: reserveAmount,
+        });
+
+        if (reserveError) {
+          console.warn('[Billing] reserve_coins RPC failed:', reserveError.message);
+        } else if (reserveResult === true) {
+          reservedCoins = reserveAmount;
+          console.log('[Billing] Reserved', reserveAmount, 'coins for call');
+        } else {
+          console.warn('[Billing] Insufficient balance for reserve, proceeding without lock');
+        }
+      } catch (reserveErr) {
+        console.warn('[Billing] reserve_coins error, proceeding without lock:', reserveErr);
+      }
+
+      const { data: callLog, error: logError } = await serverClient
+        .from('call_logs')
+        .insert({
+          user_id: callUser.user.id,
+          remote_identity: remoteIdentity,
+          direction,
+          type: direction,
+          duration_seconds: 0,
+          recorded: false,
+        })
+        .select('id')
+        .single();
+
+      if (logError) {
+        console.error('Call log insert error:', logError.message);
+      }
+
+      res.status(200).json({
+        callId: callLog?.id || null,
+        reservedCoins,
+        status: reservedCoins > 0 ? 'reserved' : 'pending',
+      });
+      return;
+    }
+
+    // call-end
+    const callId = callBody.callId as string | undefined;
+    const durationSeconds = Number(callBody.durationSeconds) || 0;
+    const reservedCoins = Number(callBody.reservedCoins) || 0;
+    const recorded = Boolean(callBody.recorded);
+
+    const actualCost = calculateCallCost(
+      durationSeconds,
+      direction === 'incoming' ? 'incoming' : 'outgoing'
+    );
+
+    let recordingCost = 0;
+    if (recorded) {
+      const recordingMinutes = Math.ceil(durationSeconds / 60);
+      recordingCost = recordingMinutes * 6;
+    }
+
+    const totalCost = actualCost + recordingCost;
+
+    if (!callId) {
+      console.log('[Billing] Fallback: no callId, creating call log and charging directly');
+
+      const { data: newLog } = await serverClient
+        .from('call_logs')
+        .insert({
+          user_id: callUser.user.id,
+          remote_identity: remoteIdentity,
+          direction,
+          type: direction,
+          duration_seconds: durationSeconds,
+          recorded,
+        })
+        .select('id')
+        .single();
+
+      const { data: debitResult, error: debitError } = await serverClient.rpc('debit_tokens', {
+        p_user_id: callUser.user.id,
+        p_tokens: totalCost,
+        p_reference: `CALL-FB-${newLog?.id || Date.now()}`,
+      });
+
+      if (debitError) {
+        console.error('[Billing] Fallback debit error:', debitError.message);
+      } else if (debitResult === true) {
+        await serverClient.from('transactions').insert({
+          user_id: callUser.user.id,
+          reference: `CALL-FB-${newLog?.id || Date.now()}`,
+          tokens: totalCost,
+          amount_minor: 0,
+          currency: 'COINS',
+          provider: 'billing',
+          status: 'success',
+          metadata: {
+            billing_type: 'call',
+            billing_direction: 'debit',
+            call_id: newLog?.id || null,
+            direction,
+            duration_seconds: durationSeconds,
+            cost_coins: totalCost,
+            fallback: true,
+          },
+        });
+        console.log(`[Billing] Fallback charged ${totalCost} coins for call`);
+      } else {
+        console.warn(`[Billing] Fallback: insufficient balance (${totalCost} coins needed)`);
+      }
+
+      res.status(200).json({
+        callId: newLog?.id || null,
+        durationSeconds,
+        actualCost,
+        recordingCost,
+        totalCost,
+        refundCoins: 0,
+        status: 'settled',
+        fallback: true,
+      });
+      return;
+    }
+
+    const { data: refundAmount, error: settleError } = await serverClient.rpc('settle_call', {
+      p_user_id: callUser.user.id,
+      p_locked_amount: reservedCoins,
+      p_actual_cost: totalCost,
+      p_call_id: callId,
+      p_direction: direction,
+      p_duration_seconds: durationSeconds,
+    });
+
+    if (settleError) {
+      console.error('Settle call error:', settleError.message);
+      console.log('[Billing] settle_call failed, trying direct debit fallback');
+      const { data: debitResult } = await serverClient.rpc('debit_tokens', {
+        p_user_id: callUser.user.id,
+        p_tokens: totalCost,
+        p_reference: `CALL-FB-${callId}`,
+      });
+
+      if (debitResult === true) {
+        await serverClient.from('transactions').insert({
+          user_id: callUser.user.id,
+          reference: `CALL-FB-${callId}`,
+          tokens: totalCost,
+          amount_minor: 0,
+          currency: 'COINS',
+          provider: 'billing',
+          status: 'success',
+          metadata: {
+            billing_type: 'call',
+            billing_direction: 'debit',
+            call_id: callId,
+            direction,
+            duration_seconds: durationSeconds,
+            cost_coins: totalCost,
+            fallback: true,
+          },
+        });
+      }
+
+      await serverClient
+        .from('call_logs')
+        .update({ duration_seconds: durationSeconds, recorded })
+        .eq('id', callId)
+        .eq('user_id', callUser.user.id);
+
+      res.status(200).json({
+        callId,
+        durationSeconds,
+        actualCost,
+        recordingCost,
+        totalCost,
+        refundCoins: 0,
+        status: 'settled',
+        fallback: true,
+      });
+      return;
+    }
+
+    await serverClient
+      .from('call_logs')
+      .update({ duration_seconds: durationSeconds, recorded })
+      .eq('id', callId)
+      .eq('user_id', callUser.user.id);
+
+    if (recorded && recordingCost > 0) {
+      await serverClient.rpc('charge_feature', {
+        p_user_id: callUser.user.id,
+        p_coins: recordingCost,
+        p_feature_type: 'recording',
+        p_metadata: { call_id: callId, duration_seconds: durationSeconds },
+      });
+    }
+
+    res.status(200).json({
+      callId,
+      durationSeconds,
+      actualCost,
+      recordingCost,
+      totalCost,
+      refundCoins: refundAmount,
+      status: 'settled',
+    });
     return;
   }
 
@@ -351,5 +604,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  res.status(400).json({ error: 'Unknown action. Use: wallet, transactions, subscription, ticket-list, ticket-detail, ticket-create, or ticket-reply.' });
+  res.status(400).json({ error: 'Unknown action. Use: wallet, transactions, subscription, ticket-list, ticket-detail, ticket-create, ticket-reply, call-start, or call-end.' });
 }
