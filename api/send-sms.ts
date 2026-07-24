@@ -177,11 +177,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Fetch read message SIDs for this user from Supabase
-    const { data: readRows } = await serverClient
-      .from('message_read_status')
-      .select('message_sid')
-      .eq('user_id', userData.user.id);
-    const readSids = new Set((readRows || []).map((r: { message_sid: string }) => r.message_sid));
+    let readSids = new Set<string>();
+    try {
+      const { data: readRows, error: readError } = await serverClient
+        .from('message_read_status')
+        .select('message_sid')
+        .eq('user_id', userData.user.id);
+      if (readError) {
+        console.error('[read-status] Failed to fetch read status (table may not exist):', readError.message);
+      } else {
+        readSids = new Set((readRows || []).map((r: { message_sid: string }) => r.message_sid));
+      }
+    } catch (readErr) {
+      console.error('[read-status] Error fetching read status:', readErr);
+    }
 
     // Mark inbound messages as 'read' if they're in the read set
     const withReadStatus = recalculated.map((m) => {
@@ -211,13 +220,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { data: balanceData, error: balanceError } = await serverClient
-    .from('user_balances')
-    .select('tokens')
-    .eq('id', userData.user.id)
-    .maybeSingle();
-
-  // Handle mark-read action
+  // Handle mark-read action (before balance check — doesn't need balance)
   if (body.action === 'mark-read') {
     const sids = body.sids as string[] | undefined;
     if (!sids || !Array.isArray(sids) || sids.length === 0) {
@@ -229,17 +232,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       message_sid: sid,
       read_at: new Date().toISOString(),
     }));
-    const { error: upsertError } = await serverClient
-      .from('message_read_status')
-      .upsert(rows, { onConflict: 'user_id,message_sid' });
-    if (upsertError) {
-      console.error('Failed to mark messages as read:', upsertError);
+    try {
+      const { error: upsertError } = await serverClient
+        .from('message_read_status')
+        .upsert(rows, { onConflict: 'user_id,message_sid' });
+      if (upsertError) {
+        console.error('[read-status] Failed to mark messages as read (table may not exist):', upsertError.message);
+        res.status(500).json({ error: 'Failed to update read status: ' + upsertError.message });
+        return;
+      }
+      console.log(`[read-status] Marked ${sids.length} messages as read for user ${userData.user.id}`);
+      res.status(200).json({ success: true, marked: sids.length });
+    } catch (upsertErr) {
+      console.error('[read-status] Error marking messages as read:', upsertErr);
       res.status(500).json({ error: 'Failed to update read status.' });
-      return;
     }
-    res.status(200).json({ success: true, marked: sids.length });
     return;
   }
+
+  const { data: balanceData, error: balanceError } = await serverClient
+    .from('user_balances')
+    .select('tokens')
+    .eq('id', userData.user.id)
+    .maybeSingle();
 
   const rawTo = body.to as string | undefined;
   const messageBody = body.body as string | undefined;
