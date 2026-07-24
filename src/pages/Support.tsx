@@ -120,7 +120,7 @@ function DesktopSupport() {
         setLoading(false);
         return;
       }
-      const res = await axios.get(`${API_URL}/support?action=list`, {
+      const res = await axios.get(`${API_URL}/billing?action=ticket-list`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setTickets(res.data.tickets || []);
@@ -288,7 +288,7 @@ function NewTicketForm({ onCancel, onCreated }: { onCancel: () => void; onCreate
         return;
       }
       await axios.post(
-        `${API_URL}/support?action=create`,
+        `${API_URL}/billing?action=ticket-create`,
         { subject: subject.trim(), category, priority, message: message.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -398,7 +398,7 @@ function TicketDetail({ ticketId, onReplySent }: { ticketId: string; onReplySent
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) return;
-      const res = await axios.get(`${API_URL}/support?action=detail&id=${ticketId}`, {
+      const res = await axios.get(`${API_URL}/billing?action=ticket-detail&id=${ticketId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setTicket(res.data.ticket);
@@ -429,7 +429,7 @@ function TicketDetail({ ticketId, onReplySent }: { ticketId: string; onReplySent
       const token = sessionData.session?.access_token;
       if (!token) return;
       await axios.post(
-        `${API_URL}/support?action=reply`,
+        `${API_URL}/billing?action=ticket-reply`,
         { ticketId, message: replyText.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -561,7 +561,7 @@ function MobileSupport() {
         setLoading(false);
         return;
       }
-      const res = await axios.get(`${API_URL}/support?action=list`, {
+      const res = await axios.get(`${API_URL}/billing?action=ticket-list`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setTickets(res.data.tickets || []);
@@ -712,7 +712,7 @@ function MobileNewTicketForm({ onCancel, onBack }: { onCancel: () => void; onBac
         return;
       }
       await axios.post(
-        `${API_URL}/support?action=create`,
+        `${API_URL}/billing?action=ticket-create`,
         { subject: subject.trim(), category, priority, message: message.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -818,7 +818,7 @@ function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: ()
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) return;
-      const res = await axios.get(`${API_URL}/support?action=detail&id=${ticketId}`, {
+      const res = await axios.get(`${API_URL}/billing?action=ticket-detail&id=${ticketId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setTicket(res.data.ticket);
@@ -849,7 +849,7 @@ function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: ()
       const token = sessionData.session?.access_token;
       if (!token) return;
       await axios.post(
-        `${API_URL}/support?action=reply`,
+        `${API_URL}/billing?action=ticket-reply`,
         { ticketId, message: replyText.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
