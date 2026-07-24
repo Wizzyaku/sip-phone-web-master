@@ -67,10 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.warn('Incomplete inbound message payload:', payload);
       } else {
         const fromNormalized = normalizePhone(from);
+        const toNormalized = normalizePhone(to);
         const serverClient = supabaseServer();
 
-        // Check if the 'from' number belongs to one of our users — if so,
-        // this is an outbound message echo, not a true inbound message.
+        // Check if the 'from' number belongs to one of our users
+        let fromOwnerId: string | null = null;
         const { data: fromOwner } = await serverClient
           .from('phone_numbers')
           .select('user_id, number')
@@ -78,8 +79,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .filter('number', 'eq', fromNormalized)
           .maybeSingle();
 
-        let fromIsOwned = !!fromOwner;
-        if (!fromIsOwned) {
+        if (fromOwner?.user_id) {
+          fromOwnerId = fromOwner.user_id;
+        } else {
           const { data: altFromOwner } = await serverClient
             .from('phone_numbers')
             .select('user_id, number')
@@ -87,11 +89,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .like('number', `%${fromNormalized}%`)
             .limit(1)
             .maybeSingle();
-          fromIsOwned = !!altFromOwner;
+          if (altFromOwner?.user_id) fromOwnerId = altFromOwner.user_id;
         }
 
-        if (fromIsOwned) {
-          console.log('Skipping outbound message echo in webhook:', { from, to, body: msgBody });
+        // Check who owns the 'to' number
+        let toOwnerId: string | null = null;
+        const { data: toOwner } = await serverClient
+          .from('phone_numbers')
+          .select('user_id, number')
+          .eq('active', true)
+          .filter('number', 'eq', toNormalized)
+          .maybeSingle();
+
+        if (toOwner?.user_id) {
+          toOwnerId = toOwner.user_id;
+        } else {
+          const { data: altToOwner } = await serverClient
+            .from('phone_numbers')
+            .select('user_id, number')
+            .eq('active', true)
+            .like('number', `%${toNormalized}%`)
+            .limit(1)
+            .maybeSingle();
+          if (altToOwner?.user_id) toOwnerId = altToOwner.user_id;
+        }
+
+        // Only skip as "outbound echo" if from and to are owned by the SAME user.
+        // If from is owned by User A and to is owned by User B, this is a legitimate
+        // inter-user message and should be stored as inbound for User B.
+        if (fromOwnerId && fromOwnerId === toOwnerId) {
+          console.log('Skipping outbound message echo in webhook (same user):', { from, to, body: msgBody });
           res.status(200).json({ received: true, skipped: true });
           return;
         }
@@ -109,33 +136,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Charge the number owner for inbound SMS
         try {
-          const toNormalized = normalizePhone(to);
-          const { data: phoneOwner } = await serverClient
-            .from('phone_numbers')
-            .select('user_id, number')
-            .eq('active', true)
-            .filter('number', 'eq', toNormalized)
-            .maybeSingle();
-
-          // Also try with + prefix
-          let owner = phoneOwner;
-          if (!owner) {
-            const { data: altOwner } = await serverClient
-              .from('phone_numbers')
-              .select('user_id, number')
-              .eq('active', true)
-              .like('number', `%${toNormalized}%`)
-              .limit(1)
-              .maybeSingle();
-            owner = altOwner;
-          }
-
-          if (owner?.user_id) {
+          if (toOwnerId) {
             const segments = estimateSmsSegments(msgBody!);
             const smsCost = SMS_COINS_PER_SEGMENT * segments;
 
             const { error: chargeError } = await serverClient.rpc('charge_sms', {
-              p_user_id: owner.user_id,
+              p_user_id: toOwnerId,
               p_coins: smsCost,
               p_message_sid: sid,
               p_direction: 'inbound',
@@ -146,12 +152,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (chargeError) {
               console.error('Inbound SMS charge error:', chargeError.message);
             } else {
-              console.log(`Charged ${smsCost} coins for inbound SMS to ${owner.user_id}`);
+              console.log(`Charged ${smsCost} coins for inbound SMS to ${toOwnerId}`);
             }
 
             // Log to messages_log
             await serverClient.from('messages_log').insert({
-              user_id: owner.user_id,
+              user_id: toOwnerId,
               message_sid: sid,
               direction: 'inbound',
               type: 'sms',

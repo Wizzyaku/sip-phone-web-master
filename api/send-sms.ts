@@ -158,8 +158,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return userNumbers.includes(fromNorm) || userNumbers.includes(toNorm);
     });
 
-    console.log(`Returning ${filtered.length} messages for user ${userData.user.id} (out of ${allMessages.length} total)`);
-    res.status(200).json(filtered);
+    // Recalculate direction relative to the viewing user:
+    // If the 'from' number belongs to this user → outbound (they sent it)
+    // If the 'to' number belongs to this user (and 'from' doesn't) → inbound (they received it)
+    const recalculated = filtered.map((m) => {
+      const fromNorm = (m.from || '').replace(/\D/g, '');
+      const toNorm = (m.to || '').replace(/\D/g, '');
+      const fromIsUserNumber = userNumbers.includes(fromNorm);
+      const toIsUserNumber = userNumbers.includes(toNorm);
+      if (fromIsUserNumber && !toIsUserNumber) {
+        return { ...m, direction: 'outbound' as const };
+      }
+      if (toIsUserNumber && !fromIsUserNumber) {
+        return { ...m, direction: 'inbound' as const };
+      }
+      // Both or neither match — keep original direction
+      return m;
+    });
+
+    console.log(`Returning ${recalculated.length} messages for user ${userData.user.id} (out of ${allMessages.length} total)`);
+    res.status(200).json(recalculated);
     return;
   }
 
