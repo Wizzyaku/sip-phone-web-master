@@ -270,19 +270,41 @@ export function AuthModal() {
         setError(data.error || 'Failed to create account.');
         return;
       }
-      setSuccess('Account created successfully! You can now sign in.');
-      setMode('login');
-      setStep('form');
-      setLoginEmail(email);
-      setPassword('');
-      setFullName('');
-      setSignupEmail('');
+      setStep('success');
+      setTimeout(() => {
+        autoLogin();
+      }, 2500);
     } catch {
       setError('Failed to verify code. Please try again.');
     } finally {
       setLoading(false);
     }
   }, [email, password, fullName, setMode, setStep, setLoginEmail]);
+
+  const autoLogin = async () => {
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError || !data.session) {
+        setStep('form');
+        setMode('login');
+        setLoginEmail(email);
+        setError('Account created! Please sign in with your credentials.');
+        setPassword('');
+        return;
+      }
+      close();
+      window.location.href = '/dashboard';
+    } catch {
+      setStep('form');
+      setMode('login');
+      setLoginEmail(email);
+      setError('Account created! Please sign in with your credentials.');
+      setPassword('');
+    }
+  };
 
   const handleResendSignup = async () => {
     setError(null);
@@ -454,8 +476,24 @@ export function AuthModal() {
               </div>
             )}
 
-            {/* OTP Step (signup) */}
-            {step === 'otp' && mode === 'signup' ? (
+            {/* Success / Welcome Step (signup) */}
+            {step === 'success' ? (
+              <div className="space-y-6 text-center py-6">
+                <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto animate-fade-in">
+                  <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold text-foreground">Welcome to Phonicity!</h2>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                    Your account has been created successfully. Signing you in and redirecting to your dashboard...
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Signing you in...</span>
+                </div>
+              </div>
+            ) : step === 'otp' && mode === 'signup' ? (
               <div>
                 <button
                   onClick={handleBack}
@@ -605,7 +643,7 @@ export function AuthModal() {
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="email"
-                        placeholder="name@company.com"
+                        placeholder="you@company.com"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
                         className="pl-10 h-10 rounded-xl"
@@ -718,7 +756,7 @@ export function AuthModal() {
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="email"
-                        placeholder="name@company.com"
+                        placeholder="you@company.com"
                         value={resetEmail}
                         onChange={(e) => setResetEmail(e.target.value)}
                         className="pl-10 h-10 rounded-xl"
@@ -771,7 +809,7 @@ export function AuthModal() {
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="text"
-                        placeholder="John Doe"
+                        placeholder="Ada Lovelace"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                         className="pl-10 h-10 rounded-xl"
@@ -786,7 +824,7 @@ export function AuthModal() {
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
                         type="email"
-                        placeholder="john@company.com"
+                        placeholder="you@company.com"
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
                         className="pl-10 h-10 rounded-xl"
