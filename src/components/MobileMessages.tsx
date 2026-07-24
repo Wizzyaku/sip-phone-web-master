@@ -18,7 +18,7 @@ import {
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Skeleton } from './ui/skeleton';
 import { cn } from '../lib/utils';
-import { type Conversation, type MessageType, type MediaUpload } from '../store/appStore';
+import { type Conversation, type MessageType, type MediaUpload, useAppStore } from '../store/appStore';
 import type { PhoneNumberRecord } from '../lib/phoneNumbers';
 
 type MobileFilterTab = 'all' | 'sms' | 'webchat';
@@ -103,6 +103,8 @@ export function MobileMessages(props: MobileMessagesProps) {
     );
   }, [props.conversations, props.mobileFilter, props.search]);
 
+  const setActiveConversation = useAppStore((s) => s.setActiveConversation);
+
   const handleOpenChat = (id: string) => {
     props.handleSelectConversation(id);
     setChatOpen(true);
@@ -110,6 +112,7 @@ export function MobileMessages(props: MobileMessagesProps) {
 
   const handleCloseChat = () => {
     setChatOpen(false);
+    setActiveConversation(null);
     props.setTo('');
   };
 

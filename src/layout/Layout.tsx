@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { MobileBottomNav } from './MobileBottomNav';
 import { SipProvider } from '../context/SipContext';
 import { cn } from '../lib/utils';
+import { useAppStore } from '../store/appStore';
 
 export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+  const activeConversation = useAppStore((s) => s.activeConversation);
+  const hideBottomNav = location.pathname === '/messages' && !!activeConversation;
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
@@ -39,10 +43,10 @@ export function Layout() {
 
         <div className="flex min-w-0 flex-1 flex-col lg:ml-[280px]">
           <Header onMenuClick={() => setMobileOpen((open) => !open)} />
-          <main className={cn('flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-16 lg:pt-16 pb-[90px] lg:pb-6', mobileOpen && 'overflow-hidden')}>
+          <main className={cn('flex min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pt-16 lg:pt-16 pb-[90px] lg:pb-6', mobileOpen && 'overflow-hidden', hideBottomNav && 'pb-6')}>
             <Outlet />
           </main>
-          {!mobileOpen && <MobileBottomNav />}
+          {!mobileOpen && !hideBottomNav && <MobileBottomNav />}
         </div>
       </div>
     </SipProvider>
