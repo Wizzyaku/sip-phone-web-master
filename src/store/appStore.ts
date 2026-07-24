@@ -84,6 +84,7 @@ interface AppState {
   messages: Message[];
   conversations: Conversation[];
   activeConversation: string | null;
+  activeTicketThread: string | null;
   call: CallState;
   mediaUploads: MediaUpload[];
   balance: Balance | null;
@@ -101,6 +102,7 @@ interface AppState {
   setCall: (call: Partial<CallState>) => void;
   resetCall: () => void;
   setActiveConversation: (id: string | null) => void;
+  setActiveTicketThread: (id: string | null) => void;
   setMessages: (messages: Message[]) => void;
   addMessage: (message: Message) => void;
   setConversations: (conversations: Conversation[]) => void;
@@ -195,6 +197,7 @@ export const useAppStore = create<AppState>()(
       messages: [],
       conversations: [],
       activeConversation: null,
+      activeTicketThread: null,
       call: {
         status: 'idle',
         muted: false,
@@ -250,6 +253,7 @@ export const useAppStore = create<AppState>()(
       clearNotifications: () => set({ notifications: [] }),
       setCall: (call) => set({ call: { ...get().call, ...call } }),
       resetCall: () => set({ call: { status: 'idle', muted: false, speakerOn: true, durationSeconds: 0 } }),
+      setActiveTicketThread: (id) => set({ activeTicketThread: id }),
       setActiveConversation: (id) => {
         set({ activeConversation: id });
         if (id) {

@@ -11,7 +11,8 @@ export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const activeConversation = useAppStore((s) => s.activeConversation);
-  const hideBottomNav = location.pathname === '/messages' && !!activeConversation;
+  const activeTicketThread = useAppStore((s) => s.activeTicketThread);
+  const hideBottomNav = (location.pathname === '/messages' && !!activeConversation) || (location.pathname === '/support' && !!activeTicketThread);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';

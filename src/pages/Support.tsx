@@ -3,6 +3,7 @@ import axios from 'axios';
 import { supabase } from '../lib/supabase';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { cn } from '../lib/utils';
+import { useAppStore } from '../store/appStore';
 import {
   HelpCircle,
   Plus,
@@ -575,6 +576,11 @@ function MobileSupport() {
   const [showNewSheet, setShowNewSheet] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const setActiveTicketThread = useAppStore((s) => s.setActiveTicketThread);
+
+  useEffect(() => {
+    return () => { setActiveTicketThread(null); };
+  }, [setActiveTicketThread]);
 
   const fetchTickets = useCallback(async () => {
     try {
@@ -596,7 +602,7 @@ function MobileSupport() {
     return ms && mf;
   });
 
-  const handleBack = () => { setSelectedId(null); fetchTickets(); };
+  const handleBack = () => { setSelectedId(null); setActiveTicketThread(null); fetchTickets(); };
   const handleCreated = () => { setShowNewSheet(false); fetchTickets(); };
 
   const tabs = [
@@ -656,7 +662,7 @@ function MobileSupport() {
               {filtered.map((ticket) => {
                 const isOpen = ticket.status === 'open';
                 return (
-                  <button key={ticket.id} onClick={() => setSelectedId(ticket.id)}
+                  <button key={ticket.id} onClick={() => { setSelectedId(ticket.id); setActiveTicketThread(ticket.id); }}
                     className={cn('group relative flex cursor-pointer flex-col gap-2.5 overflow-hidden rounded-[20px] border border-slate-200/80 bg-white p-3.5 text-left shadow-[0_4px_15px_rgba(15,23,42,0.03)] transition-colors active:bg-slate-50 dark:border-slate-700/50 dark:bg-slate-900 dark:active:bg-slate-800',
                       ticket.status === 'closed' && 'opacity-75 hover:opacity-100')}>
                     {isOpen && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />}
@@ -935,7 +941,7 @@ function MobileTicketThread({ ticketId, onBack }: { ticketId: string; onBack: ()
 
       {/* Reply Input Bar */}
       {ticket.status !== 'closed' ? (
-        <form onSubmit={handleReply} className="shrink-0 border-t border-slate-200/80 bg-white/90 px-3 py-3 pb-8 backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
+        <form onSubmit={handleReply} className="shrink-0 border-t border-slate-200/80 bg-white/90 px-3 py-3 pb-3 backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
           {error && (
             <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
               <AlertCircle className="h-3 w-3 shrink-0" />{error}
@@ -963,7 +969,7 @@ function MobileTicketThread({ ticketId, onBack }: { ticketId: string; onBack: ()
           </div>
         </form>
       ) : (
-        <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-3 py-3 pb-8 text-center backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
+        <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-3 py-3 pb-3 text-center backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
           <p className="text-[12px] font-semibold text-slate-400">This ticket is closed</p>
         </div>
       )}
