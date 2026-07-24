@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { supabase } from '../lib/supabase';
 import { useIsDesktop } from '../hooks/useIsDesktop';
@@ -10,7 +9,6 @@ import {
   ArrowLeft,
   Send,
   Loader2,
-  ChevronRight,
   MessageSquare,
   AlertCircle,
   CheckCircle,
@@ -95,7 +93,6 @@ function getCategoryLabel(value: string): string {
 
 export default function Support() {
   const isDesktop = useIsDesktop();
-  const navigate = useNavigate();
 
   if (isDesktop) {
     return <DesktopSupport />;
