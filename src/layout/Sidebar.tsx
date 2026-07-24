@@ -50,7 +50,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
         <div className="flex items-center gap-2.5">
           <img src="/phonicity2.png" alt="Phonicity" className="h-8 w-8 object-contain rounded-md" />
           <div>
-            <h1 className="text-base font-extrabold leading-tight text-slate-800 dark:text-slate-100">Phonicity</h1>
+            <h1 className="text-base font-light leading-tight tracking-[0.15em] text-slate-600 dark:text-slate-300" style={{ fontFamily: "'Outfit', sans-serif" }}>Phonicity</h1>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Enterprise</p>
           </div>
         </div>

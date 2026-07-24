@@ -48,7 +48,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         {/* Phonicity logo + name */}
         <div className="flex items-center gap-3 lg:hidden">
           <img src="/phonicity2.png" alt="Phonicity" className="h-12 w-12 min-h-[48px] min-w-[48px] object-contain rounded-md" />
-          <h1 className="text-lg font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Phonicity</h1>
+          <h1 className="text-lg font-light tracking-[0.15em] text-slate-600 dark:text-slate-300" style={{ fontFamily: "'Outfit', sans-serif" }}>Phonicity</h1>
         </div>
 
         {/* Desktop search */}
