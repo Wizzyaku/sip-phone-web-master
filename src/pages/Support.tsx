@@ -613,7 +613,7 @@ function MobileSupport() {
   ];
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#F0F4F8] dark:bg-slate-950">
+    <div className="relative h-[calc(100dvh-4rem)] w-full overflow-hidden bg-[#F0F4F8] dark:bg-slate-950">
       {/* TICKET LIST */}
       <div className={cn('absolute inset-0 flex flex-col transition-transform duration-300', selectedId && 'translate-x-[-100%]')}>
         <header className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 pb-2.5 pt-2 backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
