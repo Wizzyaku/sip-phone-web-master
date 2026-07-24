@@ -6,7 +6,7 @@ import { cn } from '../lib/utils';
 import {
   HelpCircle,
   Plus,
-  ArrowLeft,
+  X,
   Send,
   Loader2,
   MessageSquare,
@@ -544,153 +544,161 @@ function TicketDetail({ ticketId, onReplySent }: { ticketId: string; onReplySent
 
 // ===================== MOBILE =====================
 
+function MobileStatusPill({ status }: { status: string }) {
+  const cfg: Record<string, { cls: string; label: string }> = {
+    open: { cls: 'bg-emerald-50 text-emerald-600 border-emerald-100', label: 'Open' },
+    pending: { cls: 'bg-amber-50 text-amber-600 border-amber-100', label: 'Pending' },
+    closed: { cls: 'bg-slate-100 text-slate-500 border-slate-200', label: 'Resolved' },
+  };
+  const c = cfg[status] || cfg.open;
+  return <span className={cn('inline-flex items-center rounded-[6px] border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide', c.cls)}>{c.label}</span>;
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function MobileSupport() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<'list' | 'detail' | 'new'>('list');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showNewSheet, setShowNewSheet] = useState(false);
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
   const fetchTickets = useCallback(async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      if (!token) {
-        setError('You must be signed in.');
-        setLoading(false);
-        return;
-      }
-      const res = await axios.get(`${API_URL}/billing?action=ticket-list`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      if (!token) { setError('You must be signed in.'); setLoading(false); return; }
+      const res = await axios.get(`${API_URL}/billing?action=ticket-list`, { headers: { Authorization: `Bearer ${token}` } });
       setTickets(res.data.tickets || []);
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to load tickets.';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+      setError(axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to load tickets.');
+    } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchTickets();
-  }, [fetchTickets]);
+  useEffect(() => { fetchTickets(); }, [fetchTickets]);
 
-  const filtered = tickets.filter((t) => statusFilter === 'all' || t.status === statusFilter);
+  const filtered = tickets.filter((t) => {
+    const ms = !search || t.subject.toLowerCase().includes(search.toLowerCase()) || t.id.toLowerCase().includes(search.toLowerCase());
+    const mf = statusFilter === 'all' || t.status === statusFilter;
+    return ms && mf;
+  });
 
-  const handleOpenTicket = (id: string) => {
-    setSelectedId(id);
-    setView('detail');
-  };
+  const handleBack = () => { setSelectedId(null); fetchTickets(); };
+  const handleCreated = () => { setShowNewSheet(false); fetchTickets(); };
 
-  const handleBack = () => {
-    setView('list');
-    setSelectedId(null);
-    fetchTickets();
-  };
-
-  const handleCreated = () => {
-    setView('list');
-    fetchTickets();
-  };
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center pt-16">
-        <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
-      </div>
-    );
-  }
-
-  if (view === 'new') {
-    return <MobileNewTicketForm onBack={handleCreated} onCancel={() => setView('list')} />;
-  }
-
-  if (view === 'detail' && selectedId) {
-    return <MobileTicketDetail ticketId={selectedId} onBack={handleBack} />;
-  }
+  const tabs = [
+    { id: 'all', label: 'All Tickets' },
+    { id: 'open', label: 'Open', dot: 'bg-emerald-500' },
+    { id: 'pending', label: 'Pending', dot: 'bg-amber-500' },
+    { id: 'closed', label: 'Resolved', dot: 'bg-slate-300' },
+  ];
 
   return (
-    <div className="flex h-full flex-col pt-14 pb-28">
-      {/* Header */}
-      <div className="px-3 pb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">Support</h1>
-            <p className="text-[11px] text-slate-500">Submit &amp; track your tickets</p>
+    <div className="relative h-full w-full overflow-hidden bg-[#F0F4F8] dark:bg-slate-950">
+      {/* TICKET LIST */}
+      <div className={cn('absolute inset-0 flex flex-col transition-transform duration-300', selectedId && 'translate-x-[-100%]')}>
+        <header className="flex shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 pb-3 pt-14 backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
+          <h1 className="text-[15px] font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Support Center</h1>
+        </header>
+
+        <div className="no-scrollbar flex-grow overflow-y-auto px-4 pb-28 pt-3">
+          <div className="mb-3 flex flex-col gap-3">
+            <div className="relative w-full">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400 pointer-events-none">
+                <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx={11} cy={11} r={8} /><path d="m21 21-4.35-4.35" /></svg>
+              </span>
+              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ticket ID or subject..."
+                className="h-11 w-full rounded-[14px] border border-slate-200 bg-white pl-10 pr-3 text-[13px] font-semibold text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" />
+            </div>
+            <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
+              {tabs.map((t) => (
+                <button key={t.id} onClick={() => setStatusFilter(t.id)}
+                  className={cn('flex items-center gap-1 whitespace-nowrap rounded-full px-4 py-1.5 text-[12px] font-bold shadow-sm transition-all active:scale-95',
+                    statusFilter === t.id ? 'bg-slate-800 text-white dark:bg-indigo-600' : 'border border-slate-200 bg-white text-slate-600 hover:text-indigo-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400')}>
+                  {t.dot && <span className={cn('h-2 w-2 rounded-full', t.dot)} />}
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <button
-            onClick={() => setView('new')}
-            className="flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1.5 text-xs font-bold text-white active:scale-95"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New
-          </button>
+
+          {error && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />{error}
+            </div>
+          )}
+
+          <h3 className="mb-2 px-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Recent Tickets</h3>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-indigo-500" /></div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <HelpCircle className="h-10 w-10 text-slate-300 dark:text-slate-600" />
+              <p className="mt-3 text-sm font-bold text-slate-400">No tickets found</p>
+              <p className="text-xs text-slate-400">Create a new ticket to get help</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {filtered.map((ticket) => {
+                const isOpen = ticket.status === 'open';
+                return (
+                  <button key={ticket.id} onClick={() => setSelectedId(ticket.id)}
+                    className={cn('group relative flex cursor-pointer flex-col gap-2.5 overflow-hidden rounded-[20px] border border-slate-200/80 bg-white p-3.5 text-left shadow-[0_4px_15px_rgba(15,23,42,0.03)] transition-colors active:bg-slate-50 dark:border-slate-700/50 dark:bg-slate-900 dark:active:bg-slate-800',
+                      ticket.status === 'closed' && 'opacity-75 hover:opacity-100')}>
+                    {isOpen && <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500" />}
+                    <div className={cn('flex items-start justify-between', isOpen && 'pl-1')}>
+                      <div className="flex items-center gap-2">
+                        <MobileStatusPill status={ticket.status} />
+                        <span className="text-[10px] font-bold text-slate-400">#{ticket.id.slice(0, 8).toUpperCase()}</span>
+                      </div>
+                    </div>
+                    <div className={cn(isOpen && 'pl-1')}>
+                      <h4 className="text-[14px] font-extrabold leading-tight text-slate-800 transition-colors group-hover:text-indigo-600 dark:text-slate-100">{ticket.subject}</h4>
+                      <p className="mt-1 truncate text-[12px] font-medium text-slate-500 dark:text-slate-400">{ticket.message}</p>
+                    </div>
+                    <div className={cn('mt-0.5 flex items-center justify-between border-t border-slate-50 pt-2.5', isOpen && 'pl-1')}>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-white">
+                          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 0 1-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7Z" /></svg>
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">{getCategoryLabel(ticket.category)}</span>
+                      </div>
+                      <span className="text-[9px] font-extrabold text-slate-400">{timeAgo(ticket.created_at)}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
+
+        <button onClick={() => setShowNewSheet(true)}
+          className="absolute bottom-24 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-[18px] bg-indigo-600 text-white shadow-[0_8px_25px_rgba(79,70,229,0.4)] transition-transform active:scale-90 hover:bg-indigo-500">
+          <Plus className="h-6 w-6" />
+        </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 px-3 pb-2">
-        {['all', 'open', 'pending', 'closed'].map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={cn(
-              'rounded-md px-2 py-1 text-[10px] font-bold capitalize transition-colors',
-              statusFilter === s
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-            )}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="mx-3 mb-2 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          {error}
-        </div>
-      )}
-
-      {/* Ticket list */}
-      <div className="flex-1 overflow-y-auto px-3 space-y-2">
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <HelpCircle className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-            <p className="mt-2 text-xs font-bold text-slate-400">No tickets yet</p>
-            <p className="text-[10px] text-slate-400">Tap &quot;New&quot; to create one</p>
-          </div>
-        ) : (
-          filtered.map((ticket) => (
-            <button
-              key={ticket.id}
-              onClick={() => handleOpenTicket(ticket.id)}
-              className="w-full rounded-xl border border-slate-200/80 bg-white p-2.5 text-left transition-colors active:scale-[0.98] dark:border-slate-700/50 dark:bg-slate-900"
-            >
-              <div className="flex items-start justify-between gap-1.5">
-                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-1">{ticket.subject}</h3>
-                <StatusBadge status={ticket.status} />
-              </div>
-              <p className="mt-0.5 text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2">{ticket.message}</p>
-              <div className="mt-1.5 flex items-center gap-1.5">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                  {getCategoryLabel(ticket.category)}
-                </span>
-                <PriorityBadge priority={ticket.priority} />
-                <span className="ml-auto text-[9px] text-slate-400">{formatDate(ticket.created_at)}</span>
-              </div>
-            </button>
-          ))
-        )}
-      </div>
+      {selectedId && <MobileTicketThread ticketId={selectedId} onBack={handleBack} />}
+      {showNewSheet && <MobileNewTicketSheet onClose={() => setShowNewSheet(false)} onCreated={handleCreated} />}
     </div>
   );
 }
 
-function MobileNewTicketForm({ onCancel, onBack }: { onCancel: () => void; onBack: () => void }) {
+function MobileNewTicketSheet({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState('general');
   const [priority, setPriority] = useState('normal');
@@ -706,105 +714,89 @@ function MobileNewTicketForm({ onCancel, onBack }: { onCancel: () => void; onBac
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      if (!token) {
-        setError('You must be signed in.');
-        setSubmitting(false);
-        return;
-      }
-      await axios.post(
-        `${API_URL}/billing?action=ticket-create`,
+      if (!token) { setError('You must be signed in.'); setSubmitting(false); return; }
+      await axios.post(`${API_URL}/billing?action=ticket-create`,
         { subject: subject.trim(), category, priority, message: message.trim() },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      onBack();
+        { headers: { Authorization: `Bearer ${token}` } });
+      onCreated();
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to create ticket.';
-      setError(message);
-    } finally {
-      setSubmitting(false);
-    }
+      setError(axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to create ticket.');
+    } finally { setSubmitting(false); }
   };
 
   return (
-    <div className="flex h-full flex-col pt-14 pb-28">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 pb-2">
-        <button onClick={onCancel} className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-400">
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="text-sm font-extrabold text-slate-800 dark:text-slate-100">New Ticket</h1>
-      </div>
+    <div className="absolute inset-0 z-[60]">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={onClose} />
+      <div className="absolute bottom-0 left-0 right-0 flex max-h-[90dvh] flex-col rounded-t-[32px] bg-white shadow-[0_-10px_40px_rgba(0,0,0,0.1)] dark:bg-slate-900">
+        <div className="relative flex shrink-0 flex-col items-center border-b border-slate-100 px-5 pb-3 pt-3 dark:border-slate-700/50">
+          <div className="mb-3 h-1.5 w-10 rounded-full bg-slate-200 dark:bg-slate-700" />
+          <h2 className="text-[16px] font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Create Support Ticket</h2>
+          <button onClick={onClose} className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-slate-50 text-slate-500 transition-transform active:scale-95 dark:bg-slate-800">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
 
-      <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-3 space-y-2.5">
-        {error && (
-          <div className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            {error}
+        <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto px-5 py-4">
+          <div className="flex flex-col gap-3.5">
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />{error}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <label className="pl-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Category</label>
+              <div className="relative w-full">
+                <select value={category} onChange={(e) => setCategory(e.target.value)}
+                  className="h-12 w-full appearance-none rounded-[14px] border border-slate-200 bg-slate-50 px-4 text-[14px] font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {categories.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                </select>
+                <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 pointer-events-none">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="pl-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Priority</label>
+              <div className="relative w-full">
+                <select value={priority} onChange={(e) => setPriority(e.target.value)}
+                  className="h-12 w-full appearance-none rounded-[14px] border border-slate-200 bg-slate-50 px-4 text-[14px] font-semibold text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {priorities.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+                <span className="absolute inset-y-0 right-0 flex items-center pr-4 text-slate-400 pointer-events-none">
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="m6 9 6 6 6-6" /></svg>
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="pl-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Subject</label>
+              <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Brief description of the issue"
+                className="h-12 w-full rounded-[14px] border border-slate-200 bg-slate-50 px-4 text-[14px] font-semibold text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" required />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="pl-1 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Description</label>
+              <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Provide as much detail as possible..." rows={4}
+                className="w-full resize-none rounded-[14px] border border-slate-200 bg-slate-50 p-4 text-[14px] font-medium text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200" required />
+            </div>
           </div>
-        )}
-        <div>
-          <label className="mb-1 block text-[11px] font-bold text-slate-700 dark:text-slate-300">Subject</label>
-          <input
-            type="text"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            placeholder="Brief description"
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            required
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="mb-1 block text-[11px] font-bold text-slate-700 dark:text-slate-300">Category</label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              {categories.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+
+          <div className="pt-4 pb-6">
+            <button type="submit" disabled={submitting}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-[16px] bg-indigo-600 text-[14px] font-extrabold text-white shadow-[0_8px_20px_rgba(79,70,229,0.3)] transition-all active:scale-95 disabled:opacity-50">
+              {submitting ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
+              Submit Ticket
+            </button>
           </div>
-          <div>
-            <label className="mb-1 block text-[11px] font-bold text-slate-700 dark:text-slate-300">Priority</label>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            >
-              {priorities.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-[11px] font-bold text-slate-700 dark:text-slate-300">Message</label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Describe your issue..."
-            rows={5}
-            className="w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-2.5 text-xs font-bold text-white active:scale-95 disabled:opacity-50"
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-          Submit Ticket
-        </button>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
 
-function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: () => void }) {
+function MobileTicketThread({ ticketId, onBack }: { ticketId: string; onBack: () => void }) {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [replies, setReplies] = useState<TicketReply[]>([]);
   const [loading, setLoading] = useState(true);
@@ -824,16 +816,13 @@ function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: ()
       setTicket(res.data.ticket);
       setReplies(res.data.replies || []);
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to load ticket.';
-      setError(message);
+      setError(axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to load ticket.');
     } finally {
       setLoading(false);
     }
   }, [ticketId]);
 
-  useEffect(() => {
-    fetchDetail();
-  }, [fetchDetail]);
+  useEffect(() => { fetchDetail(); }, [fetchDetail]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -848,16 +837,13 @@ function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: ()
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
       if (!token) return;
-      await axios.post(
-        `${API_URL}/billing?action=ticket-reply`,
+      await axios.post(`${API_URL}/billing?action=ticket-reply`,
         { ticketId, message: replyText.trim() },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+        { headers: { Authorization: `Bearer ${token}` } });
       setReplyText('');
       await fetchDetail();
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to send reply.';
-      setError(message);
+      setError(axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to send reply.');
     } finally {
       setSending(false);
     }
@@ -865,15 +851,15 @@ function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: ()
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center pt-16">
-        <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+      <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[#F0F4F8] dark:bg-slate-950">
+        <Loader2 className="h-7 w-7 animate-spin text-indigo-500" />
       </div>
     );
   }
 
   if (!ticket) {
     return (
-      <div className="flex h-full flex-col items-center justify-center pt-16">
+      <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-[#F0F4F8] dark:bg-slate-950">
         <p className="text-sm text-slate-500">Ticket not found</p>
         <button onClick={onBack} className="mt-3 text-xs font-bold text-indigo-600">Go back</button>
       </div>
@@ -881,83 +867,104 @@ function MobileTicketDetail({ ticketId, onBack }: { ticketId: string; onBack: ()
   }
 
   return (
-    <div className="flex h-full flex-col pt-14 pb-28">
-      {/* Header */}
-      <div className="px-3 pb-2">
-        <button onClick={onBack} className="flex items-center gap-1 text-xs font-bold text-slate-600 dark:text-slate-400">
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <h1 className="mt-1 text-sm font-extrabold text-slate-800 dark:text-slate-100 line-clamp-1">{ticket.subject}</h1>
-        <div className="mt-1 flex items-center gap-1.5">
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-            {getCategoryLabel(ticket.category)}
-          </span>
-          <PriorityBadge priority={ticket.priority} />
-          <StatusBadge status={ticket.status} />
+    <div className="absolute inset-0 z-[100] flex flex-col bg-[#F0F4F8] dark:bg-slate-950">
+      {/* Thread Header */}
+      <header className="z-20 shrink-0 border-b border-slate-200/80 bg-white/90 px-3 pb-2 pt-14 backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
+        <div className="flex items-center justify-between">
+          <button onClick={onBack} className="-ml-1 flex items-center rounded-full p-1 text-indigo-600 transition-colors hover:bg-indigo-50 active:scale-90 dark:hover:bg-indigo-950/30">
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="m15 18-6-6 6-6" /></svg>
+          </button>
+          <MobileStatusPill status={ticket.status} />
         </div>
-      </div>
+        <div className="mt-1 px-2 pb-1">
+          <h2 className="text-[16px] font-extrabold leading-tight text-slate-800 dark:text-slate-100">{ticket.subject}</h2>
+          <p className="mt-0.5 text-[11px] font-bold text-slate-400">Ticket #{ticket.id.slice(0, 8).toUpperCase()}</p>
+        </div>
+      </header>
 
-      {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 space-y-2">
-        <div className="flex flex-col">
-          <div className="max-w-[85%] rounded-xl rounded-tl-sm bg-slate-100 px-3 py-2 dark:bg-slate-800">
-            <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">You</p>
-            <p className="text-[11px] text-slate-700 dark:text-slate-200 whitespace-pre-wrap">{ticket.message}</p>
-            <p className="mt-1 text-[9px] text-slate-400">{formatDate(ticket.created_at)}</p>
+      {/* Thread Messages */}
+      <div ref={scrollRef} className="no-scrollbar flex-grow overflow-y-auto px-4 py-5">
+        {/* Original User Message */}
+        <div className="flex w-full shrink-0 flex-col gap-1">
+          <div className="flex items-center gap-2 px-1">
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white">
+              <span className="text-[10px] font-bold">You</span>
+            </div>
+            <span className="text-[11px] font-extrabold text-slate-800 dark:text-slate-100">You</span>
+            <span className="ml-auto text-[9px] font-bold text-slate-400">{formatDate(ticket.created_at)}</span>
+          </div>
+          <div className="ml-8 rounded-[16px] rounded-br-sm border border-slate-200/60 bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)] dark:border-slate-700/50 dark:bg-slate-800">
+            <p className="text-[13px] font-medium leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{ticket.message}</p>
           </div>
         </div>
+
+        {/* Replies */}
         {replies.map((reply) => (
-          <div key={reply.id} className={cn('flex', reply.author_role === 'admin' ? 'justify-start' : 'justify-end')}>
+          <div key={reply.id} className="mt-4 flex w-full shrink-0 flex-col gap-1">
+            <div className="flex items-center gap-2 px-1">
+              {reply.author_role === 'admin' ? (
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-800 text-white">
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 0 1-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7Z" /></svg>
+                </div>
+              ) : (
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white">
+                  <span className="text-[10px] font-bold">You</span>
+                </div>
+              )}
+              <span className="flex items-center gap-1 text-[11px] font-extrabold text-slate-800 dark:text-slate-100">
+                {reply.author_role === 'admin' ? 'Support' : 'You'}
+                {reply.author_role === 'admin' && (
+                  <span className="rounded-[4px] bg-slate-100 px-1.5 py-0.5 text-[8px] uppercase text-slate-500 dark:bg-slate-700">Agent</span>
+                )}
+              </span>
+              <span className="ml-auto text-[9px] font-bold text-slate-400">{formatDate(reply.created_at)}</span>
+            </div>
             <div className={cn(
-              'max-w-[85%] rounded-xl px-3 py-2',
+              'ml-8 rounded-[16px] p-3 shadow-[0_2px_8px_rgba(0,0,0,0.02)]',
               reply.author_role === 'admin'
-                ? 'rounded-tl-sm bg-indigo-50 dark:bg-indigo-950/30'
-                : 'rounded-tr-sm bg-indigo-600 text-white'
+                ? 'rounded-bl-sm border border-indigo-100/60 bg-indigo-50/50 dark:border-indigo-900/30 dark:bg-indigo-950/20'
+                : 'rounded-br-sm border border-slate-200/60 bg-white dark:border-slate-700/50 dark:bg-slate-800'
             )}>
-              <p className={cn('text-[10px] font-bold mb-0.5', reply.author_role === 'admin' ? 'text-indigo-600 dark:text-indigo-400' : 'text-indigo-100')}>
-                {reply.author_role === 'admin' ? 'Support Team' : 'You'}
-              </p>
-              <p className={cn('text-[11px] whitespace-pre-wrap', reply.author_role === 'admin' ? 'text-slate-700 dark:text-slate-200' : 'text-white')}>
-                {reply.message}
-              </p>
-              <p className={cn('mt-1 text-[9px]', reply.author_role === 'admin' ? 'text-slate-400' : 'text-indigo-200')}>
-                {formatDate(reply.created_at)}
-              </p>
+              <p className="text-[13px] font-medium leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap">{reply.message}</p>
             </div>
           </div>
         ))}
+
+        <div className="h-2 shrink-0" />
       </div>
 
-      {/* Reply input */}
+      {/* Reply Input Bar */}
       {ticket.status !== 'closed' ? (
-        <form onSubmit={handleReply} className="fixed bottom-0 left-0 right-0 border-t border-slate-200/80 bg-white p-2 dark:border-slate-700/50 dark:bg-slate-900">
+        <form onSubmit={handleReply} className="shrink-0 border-t border-slate-200/80 bg-white/90 px-3 py-3 pb-8 backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
           {error && (
-            <div className="mb-1.5 flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
-              <AlertCircle className="h-3 w-3 shrink-0" />
-              {error}
+            <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+              <AlertCircle className="h-3 w-3 shrink-0" />{error}
             </div>
           )}
-          <div className="flex items-end gap-1.5">
-            <textarea
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Type your reply..."
-              rows={1}
-              className="flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-            />
-            <button
-              type="submit"
-              disabled={sending || !replyText.trim()}
-              className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white active:scale-95 disabled:opacity-50"
-            >
-              {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+          <div className="flex items-end gap-2">
+            <div className="flex min-h-[40px] flex-grow items-center rounded-[20px] border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-700 dark:bg-slate-800">
+              <textarea
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder="Write a reply..."
+                rows={1}
+                className="max-h-[100px] w-full resize-none border-none bg-transparent py-2 text-[13px] font-medium text-slate-800 placeholder-slate-400 focus:ring-0 focus:outline-none dark:text-slate-200"
+              />
+            </div>
+            <button type="submit" disabled={sending || !replyText.trim()}
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors active:scale-90',
+                replyText.trim()
+                  ? 'bg-indigo-600 text-white shadow-[0_4px_12px_rgba(79,70,229,0.3)]'
+                  : 'bg-slate-200 text-white pointer-events-none dark:bg-slate-700'
+              )}>
+              {sending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Send className="h-[18px] w-[18px]" />}
             </button>
           </div>
         </form>
       ) : (
-        <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200/80 bg-white p-2 text-center dark:border-slate-700/50 dark:bg-slate-900">
-          <p className="text-[11px] font-semibold text-slate-400">This ticket is closed</p>
+        <div className="shrink-0 border-t border-slate-200/80 bg-white/90 px-3 py-3 pb-8 text-center backdrop-blur-xl dark:border-slate-700/50 dark:bg-slate-900/90">
+          <p className="text-[12px] font-semibold text-slate-400">This ticket is closed</p>
         </div>
       )}
     </div>
