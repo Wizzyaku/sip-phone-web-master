@@ -3,11 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   Phone, MessageSquare, Route, Zap,
   CheckCircle, ArrowRight, Star, Menu, X, ChevronDown,
-  Users, TrendingUp, Clock, BarChart3
+  Users, TrendingUp, Clock, BarChart3, Sun, Moon
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { useAuthModal } from '../store/authModalStore';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+import { useAppStore } from '../store/appStore';
 
 const features = [
   {
@@ -119,6 +120,12 @@ export function Home() {
   const location = useLocation();
   const isHome = location.pathname === '/';
   const isContact = location.pathname === '/contact';
+  const resolvedTheme = useAppStore((s) => s.resolvedTheme);
+  const setTheme = useAppStore((s) => s.setTheme);
+
+  const toggleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -144,6 +151,17 @@ export function Home() {
 
             {isDesktop && (
               <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  aria-label="Toggle theme"
+                >
+                  {resolvedTheme === 'dark' ? (
+                    <Sun className="h-5 w-5" />
+                  ) : (
+                    <Moon className="h-5 w-5" />
+                  )}
+                </button>
                 <Button variant="ghost" className="font-semibold" onClick={() => openAuth('login')}>Sign in</Button>
                 <Button className="font-semibold shadow-lg shadow-primary/20" onClick={() => openAuth('signup')}>
                   Get Started Free
@@ -152,14 +170,27 @@ export function Home() {
               </div>
             )}
 
-            {/* Mobile menu button */}
+            {/* Mobile menu button + theme toggle */}
             {!isDesktop && (
-              <button
-                className="p-2 rounded-lg hover:bg-muted"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  aria-label="Toggle theme"
+                >
+                  {resolvedTheme === 'dark' ? (
+                    <Sun className="h-5 w-5" />
+                  ) : (
+                    <Moon className="h-5 w-5" />
+                  )}
+                </button>
+                <button
+                  className="p-2 rounded-lg hover:bg-muted"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                >
+                  {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                </button>
+              </div>
             )}
           </div>
         </div>
