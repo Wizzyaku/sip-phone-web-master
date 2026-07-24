@@ -331,9 +331,9 @@ export default function AdminSupport() {
       {drawerOpen && selectedTicket && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setDrawerOpen(false)} />
-          <div className="relative h-full w-full max-w-lg overflow-y-auto bg-white shadow-2xl">
+          <div className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-2xl">
             {/* Header */}
-            <div className="sticky top-0 z-10 border-b border-slate-200/80 bg-white p-4">
+            <div className="shrink-0 border-b border-slate-200/80 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg font-bold text-slate-800">{selectedTicket.subject}</h2>
@@ -365,7 +365,7 @@ export default function AdminSupport() {
             ) : (
               <>
                 {/* Conversation thread */}
-                <div ref={replyScrollRef} className="space-y-3 p-4 pb-32">
+                <div ref={replyScrollRef} className="flex-1 space-y-3 overflow-y-auto p-4 pb-4">
                   {/* Original message */}
                   <div className="rounded-xl rounded-tl-sm bg-slate-100 px-4 py-3">
                     <p className="text-xs font-bold text-slate-500 mb-1">
@@ -406,7 +406,7 @@ export default function AdminSupport() {
                 </div>
 
                 {/* Action bar */}
-                <div className="sticky bottom-0 border-t border-slate-200/80 bg-white p-3">
+                <div className="shrink-0 border-t border-slate-200/80 bg-white p-3">
                   {selectedTicket.status !== 'closed' ? (
                     <>
                       <form onSubmit={handleReply} className="mb-2">
