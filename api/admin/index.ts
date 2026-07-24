@@ -101,12 +101,19 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
   const { data: numbers, error: numbersError } = await serverClient
     .from('phone_numbers')
     .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost, user_id, created_at')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(10000);
 
   if (numbersError) {
     res.status(500).json({ error: 'Failed to fetch phone numbers.' });
     return;
   }
+
+  const { count: dbCount } = await serverClient
+    .from('phone_numbers')
+    .select('*', { count: 'exact', head: true });
+
+  console.log('[admin/numbers] DB count:', dbCount, 'Rows returned:', (numbers || []).length);
 
   const userIds = [...new Set((numbers || []).map((n) => n.user_id))];
   const { data: users } = await serverClient
