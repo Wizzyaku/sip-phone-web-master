@@ -149,35 +149,41 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
 }
 
 async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
-  const { data: profiles, error: profilesError } = await serverClient
-    .from('profiles')
-    .select('*');
-
-  if (profilesError) {
-    console.error('[admin/users] profiles query error:', profilesError.message);
-    res.status(500).json({ error: 'Failed to fetch users: ' + profilesError.message });
-    return;
-  }
-
-  const profileList = profiles || [];
-  const userIds = profileList.map((p) => p.id);
-  const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
-
-  // Fetch emails and created_at from auth.users via Admin API
-  const authMap = new Map<string, { email: string; created_at: string }>();
+  // 1. Fetch ALL users from auth.users via Admin API (paginated)
+  const authUsers: Array<{ id: string; email: string; created_at: string }> = [];
+  let page = 1;
+  const perPage = 1000;
   try {
-    const { data: authData, error: authError } = await serverClient.auth.admin.listUsers();
-
-    if (authError) {
-      console.warn('[admin/users] auth.admin.listUsers failed:', authError.message);
-    } else {
-      (authData.users || []).forEach((u) => {
-        authMap.set(u.id, { email: u.email || '', created_at: u.created_at || '' });
-      });
+    while (true) {
+      const { data, error } = await serverClient.auth.admin.listUsers({ page, perPage });
+      if (error) {
+        console.warn('[admin/users] auth.admin.listUsers failed:', error.message);
+        break;
+      }
+      const batch = (data.users || []) as Array<{ id: string; email?: string; created_at?: string }>;
+      for (const u of batch) {
+        authUsers.push({ id: u.id, email: u.email || '', created_at: u.created_at || '' });
+      }
+      if (batch.length < perPage) break;
+      page++;
+      if (page > 10) break; // safety limit
     }
   } catch (e) {
     console.warn('[admin/users] auth.admin.listUsers exception:', (e as Error).message);
   }
+
+  // 2. Fetch profiles for role/name/avatar/telegram
+  const profileMap = new Map<string, Record<string, unknown>>();
+  try {
+    const { data: profiles } = await serverClient.from('profiles').select('*');
+    (profiles || []).forEach((p) => profileMap.set(p.id, p));
+  } catch (e) {
+    console.warn('[admin/users] profiles query failed:', (e as Error).message);
+  }
+
+  // 3. Merge: use auth.users as primary source, profiles as supplementary
+  const userIds = authUsers.map((u) => u.id);
+  const safeIds = userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000'];
 
   let balanceMap = new Map<string, number>();
   let userNumbersMap = new Map<string, { id: string; number: string; label: string; active: boolean }[]>();
@@ -223,33 +229,30 @@ async function handleUsers(serverClient: ReturnType<typeof supabaseServer>, res:
     console.warn('[admin/users] admin_logs query failed:', (e as Error).message);
   }
 
-  const total = profileList.length;
-  const admins = profileList.filter((p) => p.role === 'admin').length;
-  const suspended = 0;
-  const active = profileList.filter((p) => {
-    const authData = authMap.get(p.id);
-    return authData && activeEmails.has(authData.email);
-  }).length;
-
-  const users = profileList.map((p) => {
-    const authData = authMap.get(p.id);
-    const email = authData?.email || '';
-    const userNumbers = userNumbersMap.get(p.id) || [];
+  const users = authUsers.map((u) => {
+    const profile = profileMap.get(u.id) as Record<string, unknown> | undefined;
+    const userNumbers = userNumbersMap.get(u.id) || [];
+    const email = u.email || (profile?.email as string) || '';
     return {
-      id: p.id,
-      name: p.name || email?.split('@')[0] || 'User',
+      id: u.id,
+      name: (profile?.name as string) || email.split('@')[0] || 'User',
       email,
-      avatar: p.avatar || '',
+      avatar: (profile?.avatar as string) || '',
       phoneNumber: userNumbers[0]?.number || null,
-      role: p.role || 'user',
-      createdAt: authData?.created_at || null,
-      tokenBalance: balanceMap.get(p.id) || 0,
+      role: (profile?.role as string) || 'user',
+      createdAt: u.created_at || null,
+      tokenBalance: balanceMap.get(u.id) || 0,
       assignedNumbers: userNumbers.length,
       numbers: userNumbers,
-      telegram: p.telegram_username || p.telegram_id || null,
-      telegramChatId: p.telegram_chat_id || null,
+      telegram: (profile?.telegram_username as string) || (profile?.telegram_id as string) || null,
+      telegramChatId: (profile?.telegram_chat_id as string) || null,
     };
   });
+
+  const total = users.length;
+  const admins = users.filter((u) => u.role === 'admin').length;
+  const suspended = 0;
+  const active = users.filter((u) => activeEmails.has(u.email)).length;
 
   res.status(200).json({ total, active, admins, suspended, users });
 }
@@ -511,6 +514,112 @@ async function handleUpdatePassword(serverClient: ReturnType<typeof supabaseServ
   }
 
   res.status(200).json({ success: true, userId });
+}
+
+async function handleDeleteUser(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { userId } = req.body || {};
+  if (!userId) {
+    res.status(400).json({ error: 'userId is required.' });
+    return;
+  }
+
+  // Prevent deleting other admins
+  const { data: targetProfile } = await serverClient
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (targetProfile?.role === 'admin') {
+    res.status(403).json({ error: 'Cannot delete an admin account.' });
+    return;
+  }
+
+  // Delete related data
+  try {
+    await serverClient.from('phone_numbers').delete().eq('user_id', userId);
+  } catch (e) {
+    console.warn('[admin/delete-user] phone_numbers cleanup:', (e as Error).message);
+  }
+
+  try {
+    await serverClient.from('user_balances').delete().eq('id', userId);
+  } catch (e) {
+    console.warn('[admin/delete-user] user_balances cleanup:', (e as Error).message);
+  }
+
+  try {
+    await serverClient.from('call_logs').delete().eq('user_id', userId);
+  } catch (e) {
+    console.warn('[admin/delete-user] call_logs cleanup:', (e as Error).message);
+  }
+
+  try {
+    await serverClient.from('transactions').delete().eq('user_id', userId);
+  } catch (e) {
+    console.warn('[admin/delete-user] transactions cleanup:', (e as Error).message);
+  }
+
+  try {
+    await serverClient.from('otp_codes').delete().eq('email', (
+      await serverClient.auth.admin.getUserById(userId)
+    ).data.user?.email || '');
+  } catch (e) {
+    console.warn('[admin/delete-user] otp_codes cleanup:', (e as Error).message);
+  }
+
+  // Delete profile
+  try {
+    await serverClient.from('profiles').delete().eq('id', userId);
+  } catch (e) {
+    console.warn('[admin/delete-user] profiles cleanup:', (e as Error).message);
+  }
+
+  // Delete auth user (this is the main deletion)
+  const { error: deleteError } = await serverClient.auth.admin.deleteUser(userId);
+
+  if (deleteError) {
+    console.error('[admin/delete-user] auth delete error:', deleteError.message);
+    res.status(500).json({ error: 'Failed to delete user: ' + deleteError.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, userId });
+}
+
+async function handleMakeAdmin(serverClient: ReturnType<typeof supabaseServer>, req: VercelRequest, res: VercelResponse) {
+  const { userId, role } = req.body || {};
+  if (!userId || (role !== 'admin' && role !== 'user')) {
+    res.status(400).json({ error: 'userId and role (admin|user) are required.' });
+    return;
+  }
+
+  // If removing admin role (setting to 'user'), check if target is admin — prevent it
+  if (role === 'user') {
+    const { data: targetProfile } = await serverClient
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (targetProfile?.role === 'admin') {
+      res.status(403).json({ error: 'Cannot remove admin role from another admin.' });
+      return;
+    }
+  }
+
+  const { error } = await serverClient
+    .from('profiles')
+    .update({ role })
+    .eq('id', userId);
+
+  if (error) {
+    console.error('[admin/make-admin] Error:', error.message);
+    res.status(500).json({ error: 'Failed to update role: ' + error.message });
+    return;
+  }
+
+  res.status(200).json({ success: true, userId, role });
 }
 
 const TELNYX_API_KEY = process.env.TELNYX_API_KEY ?? '';
@@ -861,6 +970,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           break;
         }
         await handleUpdatePassword(serverClient, req, res);
+        break;
+      case 'delete-user':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'delete-user requires POST' });
+          break;
+        }
+        await handleDeleteUser(serverClient, req, res);
+        break;
+      case 'make-admin':
+        if (req.method !== 'POST') {
+          res.status(405).json({ error: 'make-admin requires POST' });
+          break;
+        }
+        await handleMakeAdmin(serverClient, req, res);
         break;
       default:
         res.status(400).json({ error: `Unknown action: ${action}` });

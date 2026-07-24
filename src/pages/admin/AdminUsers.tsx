@@ -88,6 +88,11 @@ export default function AdminUsers() {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deletingUser, setDeletingUser] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  const [roleUpdating, setRoleUpdating] = useState(false);
+  const [roleMsg, setRoleMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -422,6 +427,81 @@ export default function AdminUsers() {
       setPasswordMsg(message);
     } finally {
       setPasswordSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!selectedUser) return;
+    setDeletingUser(true);
+    setDeleteMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setDeleteMsg('No active session.');
+        setDeletingUser(false);
+        return;
+      }
+
+      await axios.post(
+        '/api/admin?action=delete-user',
+        { userId: selectedUser.id },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setData((prev) => prev ? {
+        ...prev,
+        users: prev.users.filter((u) => u.id !== selectedUser.id),
+        total: prev.total - 1,
+      } : prev);
+      setDeleteMsg('User deleted successfully.');
+      setTimeout(() => {
+        closeDrawer();
+        setDeleteConfirm(false);
+        setDeleteMsg(null);
+      }, 1500);
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to delete user.';
+      setDeleteMsg(message);
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
+  const handleMakeAdmin = async () => {
+    if (!selectedUser) return;
+    setRoleUpdating(true);
+    setRoleMsg(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        setRoleMsg('No active session.');
+        setRoleUpdating(false);
+        return;
+      }
+
+      const newRole = selectedUser.role === 'admin' ? 'user' : 'admin';
+      await axios.post(
+        '/api/admin?action=make-admin',
+        { userId: selectedUser.id, role: newRole },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setData((prev) => prev ? {
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === selectedUser.id ? { ...u, role: newRole } : u
+        ),
+        admins: prev.users.filter((u) => u.id === selectedUser.id ? newRole === 'admin' : u.role === 'admin').length,
+      } : prev);
+      setSelectedUser((prev) => prev ? { ...prev, role: newRole } : prev);
+      setRoleMsg(newRole === 'admin' ? 'User promoted to admin.' : 'Admin role removed.');
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Failed to update role.';
+      setRoleMsg(message);
+    } finally {
+      setRoleUpdating(false);
     }
   };
 
@@ -925,6 +1005,77 @@ export default function AdminUsers() {
                     </div>
                   </div>
                 </div>
+
+                {/* Role Management Section */}
+                <div className="admin-card !p-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="material-symbols-outlined text-primary text-base">shield_person</span>
+                    <h5 className="text-sm font-semibold text-on-surface">Role</h5>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <RoleBadge role={selectedUser.role} />
+                      {selectedUser.role === 'admin' && (
+                        <span className="text-xs text-on-surface-variant">Cannot remove admin from another admin</span>
+                      )}
+                    </div>
+                    {selectedUser.role !== 'admin' && (
+                      <button
+                        onClick={handleMakeAdmin}
+                        disabled={roleUpdating}
+                        className="admin-action-btn !px-2 !py-1 text-xs"
+                      >
+                        {roleUpdating ? '...' : 'Make Admin'}
+                      </button>
+                    )}
+                  </div>
+                  {roleMsg && (
+                    <p className={`text-xs mt-1.5 ${roleMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{roleMsg}</p>
+                  )}
+                </div>
+
+                {/* Danger Zone - Delete User */}
+                {selectedUser.role !== 'admin' && (
+                  <div className="admin-card !p-sm border border-error/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="material-symbols-outlined text-error text-base">delete</span>
+                      <h5 className="text-sm font-semibold text-error">Danger Zone</h5>
+                    </div>
+                    {!deleteConfirm ? (
+                      <button
+                        onClick={() => { setDeleteConfirm(true); setDeleteMsg(null); }}
+                        className="admin-action-btn w-full !py-1.5 text-xs text-error flex items-center justify-center gap-1"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete_forever</span>
+                        Delete User Completely
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs text-on-surface-variant">
+                          This will permanently delete the user and all associated data (profile, numbers, balance, calls, transactions). This cannot be undone.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleDeleteUser}
+                            disabled={deletingUser}
+                            className="admin-action-btn !px-3 !py-1.5 text-xs text-error font-bold"
+                          >
+                            {deletingUser ? 'Deleting...' : 'Yes, Delete'}
+                          </button>
+                          <button
+                            onClick={() => { setDeleteConfirm(false); setDeleteMsg(null); }}
+                            className="admin-action-btn !px-3 !py-1.5 text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {deleteMsg && (
+                      <p className={`text-xs mt-1.5 ${deleteMsg.includes('success') ? 'text-[#00a651]' : 'text-error'}`}>{deleteMsg}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Assign Number Modal */}
