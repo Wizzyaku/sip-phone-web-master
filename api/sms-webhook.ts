@@ -70,7 +70,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const toNormalized = normalizePhone(to);
         const serverClient = supabaseServer();
 
-        // Check if the 'from' number belongs to one of our users
+        // Check if the 'from' number belongs to any platform user.
+        // If so, this message was already stored by send-sms.ts when the user sent it.
+        // The GET /messages endpoint recalculates direction relative to the viewing user,
+        // so we don't need to store it again here — that would create a duplicate.
         let fromOwnerId: string | null = null;
         const { data: fromOwner } = await serverClient
           .from('phone_numbers')
@@ -92,7 +95,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (altFromOwner?.user_id) fromOwnerId = altFromOwner.user_id;
         }
 
-        // Check who owns the 'to' number
+        if (fromOwnerId) {
+          console.log('Skipping message in webhook — from number is owned by a platform user (already stored by send-sms):', { from, to, body: msgBody });
+          res.status(200).json({ received: true, skipped: true });
+          return;
+        }
+
+        // Check who owns the 'to' number for billing
         let toOwnerId: string | null = null;
         const { data: toOwner } = await serverClient
           .from('phone_numbers')
@@ -112,15 +121,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .limit(1)
             .maybeSingle();
           if (altToOwner?.user_id) toOwnerId = altToOwner.user_id;
-        }
-
-        // Only skip as "outbound echo" if from and to are owned by the SAME user.
-        // If from is owned by User A and to is owned by User B, this is a legitimate
-        // inter-user message and should be stored as inbound for User B.
-        if (fromOwnerId && fromOwnerId === toOwnerId) {
-          console.log('Skipping outbound message echo in webhook (same user):', { from, to, body: msgBody });
-          res.status(200).json({ received: true, skipped: true });
-          return;
         }
 
         await addMessage({

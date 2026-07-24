@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { fetchBalance, type Balance } from '../lib/balance';
+import { supabase } from '../lib/supabase';
 
 export interface User {
   name: string;
@@ -267,6 +268,23 @@ export const useAppStore = create<AppState>()(
               m.conversationId === id && m.direction === 'inbound' ? { ...m, status: 'read' } : m
             ),
           });
+          // Persist read state to backend
+          const inboundSids = get()
+            .messages.filter((m) => m.conversationId === id && m.direction === 'inbound')
+            .map((m) => m.id);
+          if (inboundSids.length > 0) {
+            supabase.auth.getSession().then(({ data: { session } }) => {
+              if (!session?.access_token) return;
+              fetch(`${import.meta.env.VITE_API_URL ?? '/api'}/send-sms`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ action: 'mark-read', sids: inboundSids }),
+              }).catch((err) => console.error('Failed to mark messages as read:', err));
+            });
+          }
         }
       },
       setMessages: (messages) => {

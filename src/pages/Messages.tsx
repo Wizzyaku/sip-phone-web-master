@@ -174,29 +174,32 @@ export function Messages() {
       for (const m of mapped) {
         if (!dedupedMapped.has(m.id)) dedupedMapped.set(m.id, m);
       }
-      // Content-based dedup: if an outbound and inbound message have the same
-      // body and swapped from/to within 30 seconds, the inbound is an echo — drop it.
-      const outboundMsgs = mapped.filter((m) => m.direction === 'outbound');
-      const inboundToRemove = new Set<string>();
-      for (const ob of outboundMsgs) {
-        for (const ib of mapped) {
-          if (ib.direction !== 'inbound') continue;
-          if (ib.id === ob.id) continue;
-          if (ib.body !== ob.body) continue;
-          const obDigits = ob.from.replace(/\D/g, '');
-          const ibDigits = ib.to.replace(/\D/g, '');
-          const obToDigits = ob.to.replace(/\D/g, '');
-          const ibFromDigits = ib.from.replace(/\D/g, '');
-          if (obDigits === ibDigits && obToDigits === ibFromDigits) {
-            const obTime = new Date(ob.createdAt).getTime();
-            const ibTime = new Date(ib.createdAt).getTime();
-            if (Math.abs(obTime - ibTime) < 30000) {
-              inboundToRemove.add(ib.id);
+      // Content-based dedup: if two messages have the same body and matching
+      // phone pair (either direction) within 30 seconds, one is a duplicate — drop it.
+      const dupToRemove = new Set<string>();
+      for (let i = 0; i < mapped.length; i++) {
+        for (let j = i + 1; j < mapped.length; j++) {
+          const a = mapped[i];
+          const b = mapped[j];
+          if (a.id === b.id) continue;
+          if (a.body !== b.body) continue;
+          const aFrom = a.from.replace(/\D/g, '');
+          const aTo = a.to.replace(/\D/g, '');
+          const bFrom = b.from.replace(/\D/g, '');
+          const bTo = b.to.replace(/\D/g, '');
+          const phonesMatch =
+            (aFrom === bFrom && aTo === bTo) ||
+            (aFrom === bTo && aTo === bFrom);
+          if (phonesMatch) {
+            const aTime = new Date(a.createdAt).getTime();
+            const bTime = new Date(b.createdAt).getTime();
+            if (Math.abs(aTime - bTime) < 30000) {
+              dupToRemove.add(b.id);
             }
           }
         }
       }
-      for (const id of inboundToRemove) {
+      for (const id of dupToRemove) {
         dedupedMapped.delete(id);
       }
       const uniqueMapped = Array.from(dedupedMapped.values());
@@ -204,7 +207,9 @@ export function Messages() {
       const merged = current.map((sm) => {
         const apiMatch = uniqueMapped.find((m) => m.id === sm.id);
         if (!apiMatch) return sm;
-        return sm.direction === 'outbound' ? { ...apiMatch, direction: 'outbound' as const } : apiMatch;
+        // Preserve read status from store; keep direction from store (recalculated by API)
+        const preservedStatus = sm.status === 'read' ? 'read' : apiMatch.status;
+        return { ...apiMatch, status: preservedStatus };
       });
       const newApiMessages = uniqueMapped.filter((m) => !current.some((sm) => sm.id === m.id));
       setStoreMessages([...merged, ...newApiMessages]);

@@ -176,8 +176,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return m;
     });
 
-    console.log(`Returning ${recalculated.length} messages for user ${userData.user.id} (out of ${allMessages.length} total)`);
-    res.status(200).json(recalculated);
+    // Fetch read message SIDs for this user from Supabase
+    const { data: readRows } = await serverClient
+      .from('message_read_status')
+      .select('message_sid')
+      .eq('user_id', userData.user.id);
+    const readSids = new Set((readRows || []).map((r: { message_sid: string }) => r.message_sid));
+
+    // Mark inbound messages as 'read' if they're in the read set
+    const withReadStatus = recalculated.map((m) => {
+      if (m.direction === 'inbound' && readSids.has(m.sid)) {
+        return { ...m, status: 'read' };
+      }
+      return m;
+    });
+
+    console.log(`Returning ${withReadStatus.length} messages for user ${userData.user.id} (out of ${allMessages.length} total)`);
+    res.status(200).json(withReadStatus);
     return;
   }
 
@@ -201,6 +216,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .select('tokens')
     .eq('id', userData.user.id)
     .maybeSingle();
+
+  // Handle mark-read action
+  if (body.action === 'mark-read') {
+    const sids = body.sids as string[] | undefined;
+    if (!sids || !Array.isArray(sids) || sids.length === 0) {
+      res.status(400).json({ error: 'Missing sids array for mark-read action.' });
+      return;
+    }
+    const rows = sids.map((sid) => ({
+      user_id: userData.user.id,
+      message_sid: sid,
+      read_at: new Date().toISOString(),
+    }));
+    const { error: upsertError } = await serverClient
+      .from('message_read_status')
+      .upsert(rows, { onConflict: 'user_id,message_sid' });
+    if (upsertError) {
+      console.error('Failed to mark messages as read:', upsertError);
+      res.status(500).json({ error: 'Failed to update read status.' });
+      return;
+    }
+    res.status(200).json({ success: true, marked: sids.length });
+    return;
+  }
 
   const rawTo = body.to as string | undefined;
   const messageBody = body.body as string | undefined;

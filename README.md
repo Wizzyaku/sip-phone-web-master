@@ -96,6 +96,23 @@ CREATE INDEX idx_otp_codes_email ON otp_codes(email);
 CREATE INDEX idx_otp_codes_purpose ON otp_codes(purpose);
 ```
 
+### Message read status table
+
+Run this in the Supabase SQL editor to enable persistent read state for messages:
+
+```sql
+CREATE TABLE IF NOT EXISTS message_read_status (
+  user_id uuid NOT NULL,
+  message_sid text NOT NULL,
+  read_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, message_sid)
+);
+
+ALTER TABLE message_read_status ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can read their own read status" ON message_read_status
+  FOR SELECT USING (auth.uid() = user_id);
+```
+
 ### Environment variables
 
 - `RESEND_API_KEY` — Get from [resend.com/api-keys](https://resend.com/api-keys)
