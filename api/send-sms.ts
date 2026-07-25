@@ -194,12 +194,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Mark inbound messages as 'read' if they're in the read set
-    // Normalize outbound messages to 'delivered' once server has confirmed send
+    // All outbound messages are confirmed delivered once they're in Redis
     const withReadStatus = recalculated.map((m) => {
       if (m.direction === 'inbound' && readSids.has(m.sid)) {
         return { ...m, status: 'read' };
       }
-      if (m.direction === 'outbound' && m.status !== 'queued' && m.status !== 'sending') {
+      if (m.direction === 'outbound') {
         return { ...m, status: 'delivered' };
       }
       return m;

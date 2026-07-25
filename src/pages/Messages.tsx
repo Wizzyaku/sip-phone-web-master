@@ -170,7 +170,7 @@ export function Messages() {
           body: m.body,
           type: 'text' as MessageType,
           direction: m.direction === 'outbound' ? ('outbound' as const) : ('inbound' as const),
-          status: m.status || (m.direction === 'outbound' ? 'sent' : 'received'),
+          status: m.status || (m.direction === 'outbound' ? 'delivered' : 'received'),
           createdAt: m.dateCreated,
         };
       });
