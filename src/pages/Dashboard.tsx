@@ -14,15 +14,20 @@ import {
   Wallet,
   RefreshCw,
   X,
+  Coins,
+  Loader2,
+  AlertCircle,
+  Lock,
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { useSipContext } from '../context/SipContext';
-import { formatTokens } from '../lib/balance';
+import { formatTokens, formatCurrency, TOKEN_PACKAGES } from '../lib/balance';
 import { cn } from '../lib/utils';
 import { BuyNumberModal } from '../components/BuyNumberModal';
 import { fetchUserPhoneNumbers, type PhoneNumberRecord } from '../lib/phoneNumbers';
 import { fetchCallLogs, type CallLogRecord } from '../lib/callLogs';
 import { fetchTransactions, type Transaction } from '../lib/balance';
+import { supabase } from '../lib/supabase';
 
 function formatTime(date: string): string {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -61,8 +66,10 @@ export function Dashboard() {
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [expandedActivityId, setExpandedActivityId] = useState<string | null>(null);
   const [buyNumberOpen, setBuyNumberOpen] = useState(false);
-  const [selectedAmount, setSelectedAmount] = useState(50);
+  const [selectedPackage, setSelectedPackage] = useState<number>(1);
   const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const refreshBalance = useAppStore((s) => s.refreshBalance);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumberRecord[]>([]);
   const [callLogs, setCallLogs] = useState<CallLogRecord[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -127,12 +134,53 @@ export function Dashboard() {
   const callCount = callLogs.filter((c) => c.type === 'incoming' || c.type === 'outgoing').length;
   const smsCount = messages.filter((m) => m.type === 'text').length;
 
-  const handlePay = () => {
+  const handlePay = async () => {
+    setPayError(null);
+    const pkg = TOKEN_PACKAGES[selectedPackage];
+    if (!pkg) {
+      setPayError('Select a token package to continue.');
+      return;
+    }
+
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) {
+      setPayError('You must be signed in to add funds.');
+      return;
+    }
+
     setPaying(true);
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/korapay-initiate-charge', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ packageIndex: selectedPackage }),
+      });
+
+      const data = (await response.json()) as {
+        checkoutUrl?: string;
+        reference?: string;
+        error?: string;
+        korapayMessage?: string;
+      };
+
+      if (!response.ok || data.error) {
+        throw new Error(data.korapayMessage || data.error || 'Payment initialization failed.');
+      }
+
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl;
+      } else {
+        throw new Error('No checkout URL returned.');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setPayError(message);
       setPaying(false);
-      setTopUpOpen(false);
-    }, 1500);
+    }
   };
 
   const isCallType = (type: string) => type === 'incoming' || type === 'outgoing' || type === 'missed';
@@ -180,7 +228,7 @@ export function Dashboard() {
               onClick={() => setTopUpOpen(true)}
               className="h-8 px-3.5 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-[10px] text-[10px] font-extrabold flex items-center gap-1.5 backdrop-blur-sm active:scale-95 transition-all"
             >
-              <PlusCircle className="w-3.5 h-3.5" /> Top Up
+              <Coins className="w-3.5 h-3.5" /> Buy Tokens
             </button>
           </div>
 
@@ -358,8 +406,8 @@ export function Dashboard() {
               onClick={() => setTopUpOpen(true)}
               className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 font-bold shadow-sm hover:border-indigo-300 hover:text-indigo-600 transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
             >
-              <Wallet className="w-4 h-4" />
-              Top Up
+              <Coins className="w-4 h-4" />
+              Buy Tokens
             </button>
             <button
               onClick={() => navigate('/calls')}
@@ -600,66 +648,77 @@ export function Dashboard() {
       </div>
 
       {/* ========================================= */}
-      {/* TOP-UP MODAL                               */}
+      {/* TOP-UP MODAL (Korapay Token Purchase)      */}
       {/* ========================================= */}
       {topUpOpen && (
         <>
           <div
             className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70]"
-            onClick={() => setTopUpOpen(false)}
+            onClick={() => !paying && setTopUpOpen(false)}
           />
           <div className="fixed left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-[28px] z-[71] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col pb-8 pt-2 max-w-md mx-auto">
             <div className="w-10 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-4" />
 
             <div className="px-5 flex flex-col gap-4">
-              <div className="text-center">
-                <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">Add Wallet Balance</h2>
+              <div className="text-center relative">
+                <h2 className="text-lg font-extrabold text-slate-800 dark:text-slate-100">Buy Tokens</h2>
                 <p className="text-xs font-medium text-slate-500 mt-1">
                   Current balance:{' '}
                   <span className="font-bold text-indigo-600">
                     {balanceLoading || balance === null ? '...' : `${formatTokens(balance.tokens)} tokens`}
                   </span>
                 </p>
+                <button
+                  onClick={() => !paying && setTopUpOpen(false)}
+                  className="absolute -top-1 right-0 w-7 h-7 bg-slate-50 rounded-full flex items-center justify-center text-slate-500 active:scale-95 transition-transform dark:bg-slate-800"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                {[25, 50, 100].map((amt) => (
+              {/* Token Package Selection */}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                {TOKEN_PACKAGES.map((pkg, index) => (
                   <button
-                    key={amt}
-                    onClick={() => setSelectedAmount(amt)}
+                    key={pkg.tokens}
+                    onClick={() => setSelectedPackage(index)}
                     className={cn(
-                      'h-12 rounded-[14px] text-base font-extrabold transition-all active:scale-95',
-                      selectedAmount === amt
-                        ? 'bg-indigo-600 text-white border border-indigo-600 shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
-                        : 'bg-white border border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
+                      'rounded-[14px] p-3 flex flex-col items-center gap-1 transition-all active:scale-95 border',
+                      selectedPackage === index
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-[0_4px_12px_rgba(99,102,241,0.25)]'
+                        : 'bg-white border-slate-200 text-slate-700 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300'
                     )}
                   >
-                    ${amt}
+                    <Coins className={cn('w-5 h-5', selectedPackage === index ? 'text-white' : 'text-indigo-500')} />
+                    <span className="text-sm font-extrabold">{formatTokens(pkg.tokens)}</span>
+                    <span className={cn('text-[10px] font-bold', selectedPackage === index ? 'text-indigo-100' : 'text-slate-400')}>
+                      {formatCurrency(pkg.priceMinor, pkg.currency)}
+                    </span>
                   </button>
                 ))}
               </div>
 
-              <div className="relative mt-1">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400">$</span>
-                <input
-                  type="number"
-                  placeholder="Other amount"
-                  className="w-full h-12 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[14px] pl-8 pr-4 text-sm font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none"
-                />
-              </div>
-
+              {/* Payment Method */}
               <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-[14px] mt-2">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-slate-800 rounded-[8px] flex items-center justify-center text-white">
-                    <Wallet className="w-4 h-4" />
+                  <div className="w-8 h-8 bg-slate-900 rounded-[8px] flex items-center justify-center text-white shrink-0">
+                    <Lock className="w-4 h-4" />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Default Method</span>
-                    <span className="text-xs text-slate-500 font-medium">Token purchase</span>
+                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Korapay</span>
+                    <span className="text-xs text-slate-500 font-medium">Secure Checkout</span>
                   </div>
                 </div>
-                <span className="text-sm text-slate-400 font-bold">Change</span>
+                <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-[6px] uppercase tracking-widest border border-emerald-100">Active</span>
               </div>
+
+              {/* Error Display */}
+              {payError && (
+                <div className="flex items-center gap-1.5 text-xs text-red-500 bg-red-50 border border-red-100 rounded-[12px] p-2.5 dark:bg-red-900/20 dark:border-red-800">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  {payError}
+                </div>
+              )}
 
               <button
                 onClick={handlePay}
@@ -671,15 +730,17 @@ export function Dashboard() {
               >
                 {paying ? (
                   <>
-                    <CheckCircle className="w-5 h-5" /> Processing...
+                    <Loader2 className="w-5 h-5 animate-spin" /> Processing...
                   </>
                 ) : (
-                  `Pay $${selectedAmount}`
+                  <>
+                    <Lock className="w-4 h-4" /> Pay {formatCurrency(TOKEN_PACKAGES[selectedPackage].priceMinor, TOKEN_PACKAGES[selectedPackage].currency)}
+                  </>
                 )}
               </button>
 
               <button
-                onClick={() => setTopUpOpen(false)}
+                onClick={() => !paying && setTopUpOpen(false)}
                 className="w-full flex items-center justify-center gap-1 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
               >
                 <X className="w-3.5 h-3.5" /> Cancel
