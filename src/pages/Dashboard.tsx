@@ -86,7 +86,7 @@ export function Dashboard() {
   const activity = useMemo(() => {
     const items: { id: string; title: string; description: string; time: string; type: string }[] = [];
 
-    for (const m of messages.slice(0, 10)) {
+    for (const m of messages.slice(0, 3)) {
       const isInbound = m.direction === 'inbound';
       const isSms = m.type === 'text';
       if (isSms) {
@@ -100,7 +100,7 @@ export function Dashboard() {
       }
     }
 
-    for (const c of callLogs.slice(0, 10)) {
+    for (const c of callLogs.slice(0, 5)) {
       const mins = Math.floor(c.duration_seconds / 60);
       const secs = c.duration_seconds % 60;
       const durationStr = `${mins}m ${secs.toString().padStart(2, '0')}s`;
@@ -120,7 +120,7 @@ export function Dashboard() {
     }
 
     items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    return items.slice(0, 8);
+    return items.slice(0, 5);
   }, [messages, callLogs, transactions]);
 
   const activeNumbers = phoneNumbers.filter((n) => n.active).length;
@@ -280,6 +280,7 @@ export function Dashboard() {
         <div className="animate-fade-in animate-delay-300 shrink-0 flex flex-col gap-2.5 mt-2">
           <div className="flex justify-between items-end px-1">
             <h3 className="text-[14px] font-bold text-slate-800 dark:text-slate-100 tracking-tight">Recent Activity</h3>
+            <button onClick={() => navigate('/messages')} className="text-[11px] font-extrabold text-indigo-600 hover:text-indigo-800 transition-colors">View All</button>
           </div>
 
           <div className="bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-1.5 flex flex-col dark:bg-slate-900 dark:border-slate-700/50">
