@@ -11,7 +11,6 @@ import {
   Pencil,
   Copy,
   CheckCircle,
-  AlertCircle,
   Loader2,
   LogOut,
   Laptop,
@@ -65,14 +64,10 @@ export function Settings() {
   const notifications = useAppStore((s) => s.notifications);
   const clearNotifications = useAppStore((s) => s.clearNotifications);
   const telnyxNumber = useAppStore((s) => s.telnyxNumber);
-  const setTelnyxNumber = useAppStore((s) => s.setTelnyxNumber);
 
   const [editingProfile, setEditingProfile] = useState(false);
   const [saved, setSaved] = useState(false);
   const [draft, setDraft] = useState({ name: user.name, email: user.email, bio: user.bio ?? '', avatar: user.avatar });
-  const [numberDraft, setNumberDraft] = useState(telnyxNumber ?? '');
-  const [verifying, setVerifying] = useState(false);
-  const [verifyStatus, setVerifyStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(false);
@@ -107,43 +102,6 @@ export function Settings() {
   };
 
   const API_URL = import.meta.env.VITE_API_URL ?? '/api';
-
-  const handleVerifyNumber = async () => {
-    const raw = numberDraft.trim();
-    if (!raw) return;
-    setVerifying(true);
-    setVerifyStatus(null);
-    try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      if (!token) {
-        setVerifyStatus({ type: 'error', message: 'You must be signed in.' });
-        setVerifying(false);
-        return;
-      }
-      const res = await axios.post(`${API_URL}/verify-number`, { phoneNumber: raw }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.data.valid) {
-        setVerifyStatus({ type: 'success', message: `${res.data.phoneNumber} is verified and active.` });
-      } else {
-        setVerifyStatus({ type: 'error', message: 'Number could not be verified.' });
-      }
-    } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error || err.message : 'Verification failed';
-      setVerifyStatus({ type: 'error', message });
-    } finally {
-      setVerifying(false);
-    }
-  };
-
-  const handleSaveNumber = async () => {
-    const number = numberDraft.trim() || null;
-    setTelnyxNumber(number);
-    await saveProfile(user, number);
-    setVerifyStatus({ type: 'success', message: 'Sender number saved.' });
-    window.setTimeout(() => setVerifyStatus(null), 3000);
-  };
 
   const getUserId = async (): Promise<string | null> => {
     const { data } = await supabase.auth.getUser();
@@ -321,53 +279,6 @@ export function Settings() {
                   </div>
                   <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors" />
                 </button>
-
-                {/* Sender Number */}
-                <div className="p-2.5 flex flex-col gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-[10px] bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0 dark:bg-indigo-900/30 dark:text-indigo-400">
-                      <Phone className="w-4 h-4" />
-                    </div>
-                    <div className="flex flex-col flex-grow">
-                      <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Sender Number</span>
-                      {telnyxNumber && <span className="text-[9px] font-bold text-emerald-500">{telnyxNumber}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pl-12">
-                    <input
-                      type="tel"
-                      value={numberDraft}
-                      onChange={(e) => setNumberDraft(e.target.value)}
-                      placeholder="+14237303370"
-                      className="flex-1 h-9 bg-slate-50 border border-slate-200 rounded-[10px] px-3 text-[12px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
-                    />
-                    <button
-                      onClick={handleVerifyNumber}
-                      disabled={verifying || !numberDraft.trim()}
-                      className="h-9 px-3 bg-slate-100 border border-slate-200 rounded-[10px] text-[11px] font-bold text-slate-600 active:scale-95 transition-transform disabled:opacity-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300"
-                    >
-                      {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
-                    </button>
-                  </div>
-                  {verifyStatus && (
-                    <div className={cn(
-                      'pl-12 flex items-center gap-1.5 text-[11px] font-medium',
-                      verifyStatus.type === 'success' ? 'text-emerald-600' : 'text-red-500'
-                    )}>
-                      {verifyStatus.type === 'success' ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                      {verifyStatus.message}
-                    </div>
-                  )}
-                  <div className="pl-12">
-                    <button
-                      onClick={handleSaveNumber}
-                      disabled={!numberDraft.trim()}
-                      className="text-[11px] font-bold text-indigo-600 active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      Save Number
-                    </button>
-                  </div>
-                </div>
 
                 {/* Two-Factor Auth */}
                 <div className="p-2 flex items-center justify-between group active:bg-slate-50 rounded-[14px] transition-colors cursor-pointer dark:active:bg-slate-800">
@@ -694,54 +605,6 @@ export function Settings() {
                       </div>
                     </div>
                   )}
-                </div>
-
-                {/* Sender Number Card */}
-                <div className="bg-white border border-slate-200/80 rounded-[24px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-5 dark:bg-slate-900 dark:border-slate-700/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Phone className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    <h3 className="text-[16px] font-bold text-slate-800 tracking-tight dark:text-slate-100">Telnyx Sender Number</h3>
-                  </div>
-                  <p className="text-[12px] font-medium text-slate-500 mb-4 dark:text-slate-400">Verify and set the phone number used to send SMS from the web.</p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="tel"
-                      value={numberDraft}
-                      onChange={(e) => setNumberDraft(e.target.value)}
-                      placeholder="+14237303370"
-                      className="flex-1 h-10 bg-slate-50 border border-slate-200 rounded-[12px] px-3 text-[13px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
-                    />
-                    <button
-                      onClick={handleVerifyNumber}
-                      disabled={verifying || !numberDraft.trim()}
-                      className="h-10 px-4 bg-slate-100 border border-slate-200 rounded-[12px] text-[13px] font-bold text-slate-600 active:scale-95 transition-transform disabled:opacity-50 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300"
-                    >
-                      {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verify'}
-                    </button>
-                  </div>
-                  {verifyStatus && (
-                    <div className={cn(
-                      'mt-3 flex items-center gap-2 text-[12px] font-medium',
-                      verifyStatus.type === 'success' ? 'text-emerald-600' : 'text-red-500'
-                    )}>
-                      {verifyStatus.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                      {verifyStatus.message}
-                    </div>
-                  )}
-                  <div className="mt-4 flex items-center gap-3">
-                    <button
-                      onClick={handleSaveNumber}
-                      disabled={!numberDraft.trim()}
-                      className="h-10 px-4 bg-indigo-600 text-white rounded-[12px] text-[13px] font-bold active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      Save Number
-                    </button>
-                    {telnyxNumber && (
-                      <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
-                        Current: <span className="font-bold text-slate-800 dark:text-slate-100">{telnyxNumber}</span>
-                      </span>
-                    )}
-                  </div>
                 </div>
 
                 {/* Security & Sessions */}
