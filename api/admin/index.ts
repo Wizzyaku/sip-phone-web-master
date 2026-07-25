@@ -98,7 +98,60 @@ async function handleOverview(serverClient: ReturnType<typeof supabaseServer>, r
 }
 
 async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, res: VercelResponse) {
-  const { data: numbers, error: numbersError } = await serverClient
+  // 1. Fetch ALL numbers from Telnyx (authoritative source) with pagination
+  let telnyxNumbers: Array<{ phone_number: string; status: string; features?: string[]; phone_type?: string; country?: string; cost?: number }> = [];
+  if (TELNYX_API_KEY) {
+    try {
+      let pageNum = 1;
+      while (true) {
+        const url = new URL('https://api.telnyx.com/v2/phone_numbers');
+        url.searchParams.set('page[size]', '200');
+        url.searchParams.set('page[number]', String(pageNum));
+
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${TELNYX_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          console.error('[admin/numbers] Telnyx API error:', data);
+          break;
+        }
+
+        const rawRecords = (data?.data as Array<Record<string, unknown>>) || [];
+        if (rawRecords.length === 0) break;
+
+        for (const record of rawRecords) {
+          telnyxNumbers.push({
+            phone_number:
+              (record.phone_number as string) ||
+              (record.phone_number_e164 as string) ||
+              (record.number as string) ||
+              '',
+            status: (record.status as string) || 'active',
+            features: Array.isArray(record.features) ? record.features as string[] : [],
+            phone_type: (record.phone_number_type as string) || '',
+            country: (record.country_iso_alpha2 as string) || '',
+            cost: record.cost ? Number(record.cost) : undefined,
+          });
+        }
+
+        if (rawRecords.length < 200) break;
+        pageNum++;
+        if (pageNum > 20) break; // safety limit
+      }
+      console.log('[admin/numbers] Telnyx returned', telnyxNumbers.length, 'numbers');
+    } catch (err) {
+      console.error('[admin/numbers] Telnyx fetch exception:', (err as Error).message);
+    }
+  }
+
+  // 2. Fetch Supabase phone_numbers for assignment/billing info
+  const { data: dbNumbers, error: numbersError } = await serverClient
     .from('phone_numbers')
     .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost, user_id, created_at')
     .order('created_at', { ascending: false })
@@ -109,42 +162,96 @@ async function handleNumbers(serverClient: ReturnType<typeof supabaseServer>, re
     return;
   }
 
-  const { count: dbCount } = await serverClient
-    .from('phone_numbers')
-    .select('*', { count: 'exact', head: true });
-
-  console.log('[admin/numbers] DB count:', dbCount, 'Rows returned:', (numbers || []).length);
-
-  const userIds = [...new Set((numbers || []).map((n) => n.user_id))];
-  const { data: users } = await serverClient
-    .from('profiles')
-    .select('id, name, email')
-    .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']);
-
-  const userMap = new Map((users || []).map((u) => [u.id, u]));
-
-  const totalNumbers = (numbers || []).length;
-  const activeNumbers = (numbers || []).filter((n) => n.active).length;
-  const unassignedNumbers = (numbers || []).filter((n) => !n.user_id).length;
-  const pendingNumbers = (numbers || []).filter((n) => !n.active && n.user_id).length;
-
-  const formattedNumbers = (numbers || []).map((n) => {
-    const user = userMap.get(n.user_id);
-    return {
-      id: n.id,
-      number: n.number,
-      label: n.label || '',
-      flag: n.flag || '🌐',
-      features: n.features || [],
-      active: n.active,
-      forwarding: n.forwarding || null,
-      voicemail: n.voicemail || false,
-      monthlyCost: n.monthly_cost || 0,
-      assignedUser: user ? user.name || user.email : null,
-      assignedUserId: n.user_id || null,
-      createdAt: n.created_at,
-    };
+  // Map: normalized number -> db record
+  const dbMap = new Map<string, { id: string; number: string; label: string; flag: string; features: string[]; active: boolean; forwarding: string | null; voicemail: boolean; monthly_cost: number; user_id: string | null; created_at: string }>();
+  (dbNumbers || []).forEach((n) => {
+    const normalized = normalizePhone(n.number || '');
+    dbMap.set(normalized, n);
   });
+
+  // 3. Fetch owner names for assigned numbers
+  const assignedUserIds = [...new Set([...dbMap.values()].map((v) => v.user_id).filter(Boolean))] as string[];
+  let ownerMap = new Map<string, string>();
+  if (assignedUserIds.length > 0) {
+    const { data: profiles } = await serverClient
+      .from('profiles')
+      .select('id, name, email')
+      .in('id', assignedUserIds);
+    (profiles || []).forEach((p) => {
+      ownerMap.set(p.id, p.name || p.email || 'Unknown');
+    });
+  }
+
+  // 4. Merge: Use Telnyx as authoritative source if available, otherwise fall back to Supabase-only
+  let formattedNumbers: Array<Record<string, unknown>>;
+
+  if (telnyxNumbers.length > 0) {
+    // Telnyx-first merge: include all Telnyx numbers, enrich with Supabase data
+    formattedNumbers = telnyxNumbers.map((t) => {
+      const normalized = normalizePhone(t.phone_number);
+      const dbRecord = dbMap.get(normalized);
+      const telnyxLabel = t.phone_type ? t.phone_type.replace(/_/g, ' ') : '';
+      return {
+        id: dbRecord?.id || normalized,
+        number: t.phone_number,
+        label: dbRecord?.label || telnyxLabel,
+        flag: dbRecord?.flag || t.country || '🌐',
+        features: dbRecord?.features || t.features || [],
+        active: dbRecord?.active ?? (t.status === 'active'),
+        forwarding: dbRecord?.forwarding || null,
+        voicemail: dbRecord?.voicemail || false,
+        monthlyCost: dbRecord?.monthly_cost || t.cost || 0,
+        assignedUser: dbRecord?.user_id ? ownerMap.get(dbRecord.user_id) || 'Unknown' : null,
+        assignedUserId: dbRecord?.user_id || null,
+        createdAt: dbRecord?.created_at || new Date().toISOString(),
+      };
+    });
+
+    // Also include any Supabase numbers not in Telnyx (e.g. recently purchased but not yet provisioned)
+    const telnyxSet = new Set(telnyxNumbers.map((t) => normalizePhone(t.phone_number)));
+    for (const [normalized, dbRecord] of dbMap.entries()) {
+      if (!telnyxSet.has(normalized)) {
+        formattedNumbers.push({
+          id: dbRecord.id,
+          number: dbRecord.number,
+          label: dbRecord.label || '',
+          flag: dbRecord.flag || '🌐',
+          features: dbRecord.features || [],
+          active: dbRecord.active,
+          forwarding: dbRecord.forwarding || null,
+          voicemail: dbRecord.voicemail || false,
+          monthlyCost: dbRecord.monthly_cost || 0,
+          assignedUser: dbRecord.user_id ? ownerMap.get(dbRecord.user_id) || 'Unknown' : null,
+          assignedUserId: dbRecord.user_id || null,
+          createdAt: dbRecord.created_at,
+        });
+      }
+    }
+  } else {
+    // No Telnyx key or Telnyx fetch failed — fall back to Supabase-only
+    formattedNumbers = (dbNumbers || []).map((n) => {
+      const user = n.user_id ? ownerMap.get(n.user_id) : null;
+      return {
+        id: n.id,
+        number: n.number,
+        label: n.label || '',
+        flag: n.flag || '🌐',
+        features: n.features || [],
+        active: n.active,
+        forwarding: n.forwarding || null,
+        voicemail: n.voicemail || false,
+        monthlyCost: n.monthly_cost || 0,
+        assignedUser: user,
+        assignedUserId: n.user_id || null,
+        createdAt: n.created_at,
+      };
+    });
+  }
+
+  const totalNumbers = formattedNumbers.length;
+  const activeNumbers = formattedNumbers.filter((n) => n.active).length;
+  const unassignedNumbers = formattedNumbers.filter((n) => !n.assignedUserId).length;
+  const pendingNumbers = formattedNumbers.filter((n) => !n.active && n.assignedUserId).length;
 
   res.status(200).json({
     totalNumbers,
