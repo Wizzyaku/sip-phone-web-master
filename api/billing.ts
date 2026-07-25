@@ -457,7 +457,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from('support_tickets')
           .select('*')
           .eq('user_id', supportUser.user.id)
-          .order('created_at', { ascending: false });
+          .order('updated_at', { ascending: false });
 
         if (error) {
           console.error('[billing/ticket-list] Error:', error.message);

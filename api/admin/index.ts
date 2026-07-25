@@ -1004,7 +1004,7 @@ async function handleTickets(serverClient: ReturnType<typeof supabaseServer>, re
   let query = serverClient
     .from('support_tickets')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('updated_at', { ascending: false });
 
   if (status && status !== 'all') {
     query = query.eq('status', status);
