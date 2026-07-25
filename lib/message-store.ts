@@ -45,3 +45,18 @@ export async function addMessage(msg: StoredMessage): Promise<void> {
   await redis.lpush(MESSAGES_KEY, JSON.stringify(msg));
   await redis.ltrim(MESSAGES_KEY, 0, MAX_MESSAGES - 1);
 }
+
+export async function updateMessageStatus(sid: string, status: string): Promise<void> {
+  const messages = await getMessages();
+  const idx = messages.findIndex((m) => m.sid === sid);
+  if (idx === -1) {
+    console.log('[message-store] Message not found for status update:', sid);
+    return;
+  }
+  messages[idx].status = status;
+  await redis.del(MESSAGES_KEY);
+  for (let i = messages.length - 1; i >= 0; i--) {
+    await redis.rpush(MESSAGES_KEY, JSON.stringify(messages[i]));
+  }
+  console.log('[message-store] Updated status for', sid, 'to', status);
+}

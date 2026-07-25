@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { addMessage } from '../lib/message-store.js';
+import { addMessage, updateMessageStatus } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
 import { SMS_COINS_PER_SEGMENT, estimateSmsSegments } from '../lib/billing.js';
 import { notifyTelegramByPhone } from '../lib/telegram.js';
@@ -176,6 +176,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           to,
           `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`
         );
+      }
+    } else if (eventType === 'message.delivery_update') {
+      const payload = event?.payload as Record<string, unknown> | undefined;
+      const sid = (payload?.id as string) || ((payload?.message_id as string) || '');
+      const toData = payload?.to as unknown[];
+      const deliveryStatus = (toData?.[0] as Record<string, unknown>)?.status as string | undefined;
+
+      if (sid && deliveryStatus) {
+        console.log('[webhook] Delivery update for', sid, '->', deliveryStatus);
+        try {
+          await updateMessageStatus(sid, deliveryStatus);
+        } catch (updateErr) {
+          console.error('[webhook] Failed to update message status:', (updateErr as Error).message);
+        }
       }
     }
 

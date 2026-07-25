@@ -85,9 +85,15 @@ function formatRelative(date: string): string {
 export function MobileMessages(props: MobileMessagesProps) {
   const [chatOpen, setChatOpen] = useState(false);
 
+  const activeId = useAppStore((s) => s.activeConversation);
+
   useEffect(() => {
-    setChatOpen(!!props.activeConversation);
-  }, [props.activeConversation]);
+    if (props.activeConversation) {
+      setChatOpen(true);
+    } else if (!activeId) {
+      setChatOpen(false);
+    }
+  }, [props.activeConversation, activeId]);
 
   const filteredConversations = useMemo(() => {
     let list = [...props.conversations].sort((a, b) => {
@@ -325,9 +331,12 @@ export function MobileMessages(props: MobileMessagesProps) {
                             {msg.status === 'read' ? (
                               <CheckCheck className="w-3 h-3 text-indigo-200" />
                             ) : msg.status === 'delivered' ? (
-                              <CheckCheck className="w-3 h-3 text-indigo-300" />
+                              <span className="flex items-center gap-0.5">
+                                <CheckCheck className="w-3 h-3 text-emerald-400" />
+                                <span className="text-[8px] font-bold text-emerald-400">Delivered</span>
+                              </span>
                             ) : (
-                              <Check className="w-3 h-3 text-indigo-300" />
+                              <Check className="w-3.5 h-3.5 text-red-500 stroke-[3]" />
                             )}
                           </>
                         )}

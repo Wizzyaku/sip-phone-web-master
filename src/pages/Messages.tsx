@@ -213,7 +213,7 @@ export function Messages() {
         if (!apiMatch) return sm;
         // Preserve read status from store; keep direction from store (recalculated by API)
         const preservedStatus = sm.status === 'read' ? 'read' : apiMatch.status;
-        return { ...apiMatch, status: preservedStatus };
+        return { ...apiMatch, conversationId: sm.conversationId, status: preservedStatus };
       });
       const newApiMessages = uniqueMapped.filter((m) => !current.some((sm) => sm.id === m.id));
       setStoreMessages([...merged, ...newApiMessages]);
@@ -339,7 +339,7 @@ export function Messages() {
         body: body.trim(),
         type: 'text',
         direction: 'outbound',
-        status: res.data.status || 'sent',
+        status: res.data.status || 'queued',
         createdAt: new Date().toISOString(),
       });
       setBody('');
@@ -370,7 +370,7 @@ export function Messages() {
       mediaUrl: url,
       mediaName: file.name,
       direction: 'outbound',
-      status: 'sent',
+      status: 'queued',
       createdAt: new Date().toISOString(),
     });
   };
@@ -698,9 +698,12 @@ export function Messages() {
                                 {msg.status === 'read' ? (
                                   <CheckCheck className="h-3 w-3 text-indigo-200" />
                                 ) : msg.status === 'delivered' ? (
-                                  <CheckCheck className="h-3 w-3 text-indigo-300" />
+                                  <span className="flex items-center gap-0.5">
+                                    <CheckCheck className="h-3 w-3 text-emerald-400" />
+                                    <span className="text-[8px] font-bold text-emerald-400">Delivered</span>
+                                  </span>
                                 ) : (
-                                  <Check className="h-3 w-3 text-indigo-300" />
+                                  <Check className="h-3.5 w-3.5 text-red-500 stroke-[3]" />
                                 )}
                               </span>
                             )}

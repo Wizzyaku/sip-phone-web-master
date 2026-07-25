@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { addMessage, getMessages } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
+import { notifyTelegramByPhone } from '../lib/telegram.js';
 import {
   SMS_COINS_PER_SEGMENT,
   MMS_COINS_PER_MESSAGE,
@@ -364,6 +365,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await addMessage(retryRecord);
           console.log('Outbound SMS sent (after retry):', retryRecord);
 
+          await notifyTelegramByPhone(
+            fromNumber,
+            `*SMS sent to ${to}*\n\n${messageBody}\n\n_From: ${fromNumber}_`
+          );
+
           res.status(200).json({ sid: retryMessage.id, status: retryRecord.status, cost: smsCost });
           return;
         }
@@ -384,6 +390,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     await addMessage(record);
     console.log('Outbound SMS sent:', record);
+
+    await notifyTelegramByPhone(
+      fromNumber,
+      `*SMS sent to ${to}*\n\n${messageBody}\n\n_From: ${fromNumber}_`
+    );
 
     // Charge coins for the SMS — try charge_sms RPC first, fall back to debit_tokens
     let charged = false;
