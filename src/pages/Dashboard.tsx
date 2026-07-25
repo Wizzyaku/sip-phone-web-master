@@ -654,7 +654,7 @@ export function Dashboard() {
             className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70]"
             onClick={() => !paying && setTopUpOpen(false)}
           />
-          <div className="fixed left-0 right-0 bottom-0 bg-white dark:bg-slate-900 rounded-t-[28px] z-[71] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col pb-8 pt-2 max-w-md mx-auto">
+          <div className="fixed z-[71] flex flex-col bg-white dark:bg-slate-900 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] lg:shadow-[0_20px_60px_rgba(0,0,0,0.15)] pb-8 pt-2 max-w-md mx-auto left-0 right-0 bottom-0 rounded-t-[28px] lg:top-1/2 lg:left-1/2 lg:right-auto lg:bottom-auto lg:-translate-x-1/2 lg:-translate-y-1/2 lg:rounded-[28px] lg:w-[440px]">
             <div className="w-10 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-4" />
 
             <div className="px-5 flex flex-col gap-4">
