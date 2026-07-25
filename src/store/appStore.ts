@@ -266,7 +266,11 @@ export const useAppStore = create<AppState>()(
                 }
               : c
           );
-          set({ conversations: updated });
+          set({ conversations: updated.sort((a, b) => {
+            const aTime = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
+            const bTime = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
+            return bTime - aTime;
+          }) });
           set({
             messages: get().messages.map((m) =>
               m.conversationId === id && m.direction === 'inbound' ? { ...m, status: 'read' } : m

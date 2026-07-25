@@ -127,7 +127,11 @@ export function Messages() {
   }, [conversations, activeId]);
 
   const filteredConversations = useMemo(() => {
-    let list = conversations;
+    let list = [...conversations].sort((a, b) => {
+      const aTime = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const bTime = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
     if (filter === 'unread') list = list.filter((c) => c.unreadCount > 0);
     if (filter === 'groups') list = list.filter((c) => c.contact.includes('+') && c.contact.length > 12);
     const query = search.trim().toLowerCase();

@@ -90,7 +90,11 @@ export function MobileMessages(props: MobileMessagesProps) {
   }, [props.activeConversation]);
 
   const filteredConversations = useMemo(() => {
-    let list = props.conversations;
+    let list = [...props.conversations].sort((a, b) => {
+      const aTime = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const bTime = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
     if (props.mobileFilter === 'sms') list = list.filter((c) => isSmsContact(c.contact));
     if (props.mobileFilter === 'webchat') list = list.filter((c) => !isSmsContact(c.contact));
     const query = props.search.trim().toLowerCase();
