@@ -360,7 +360,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             body: retryMessage.text || messageBody,
             direction: 'outbound' as const,
             dateCreated: retryMessage.received_at || new Date().toISOString(),
-            status: retryMessage.to?.[0]?.status || 'queued',
+            status: ['delivered', 'sent', 'webhook_delivered'].includes(retryMessage.to?.[0]?.status) ? retryMessage.to[0].status : 'sent',
           };
           await addMessage(retryRecord);
           console.log('Outbound SMS sent (after retry):', retryRecord);
@@ -386,7 +386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: message.text || messageBody,
       direction: 'outbound' as const,
       dateCreated: message.received_at || new Date().toISOString(),
-      status: message.to?.[0]?.status || 'queued',
+      status: ['delivered', 'sent', 'webhook_delivered'].includes(message.to?.[0]?.status) ? message.to[0].status : 'sent',
     };
     await addMessage(record);
     console.log('Outbound SMS sent:', record);

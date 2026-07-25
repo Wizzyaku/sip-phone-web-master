@@ -697,13 +697,13 @@ export function Messages() {
                               <span className="flex items-center gap-0.5">
                                 {msg.status === 'read' ? (
                                   <CheckCheck className="h-3 w-3 text-indigo-200" />
-                                ) : msg.status === 'delivered' ? (
+                                ) : msg.status === 'queued' || msg.status === 'sending' ? (
+                                  <Check className="h-3.5 w-3.5 text-red-500 stroke-[3]" />
+                                ) : (
                                   <span className="flex items-center gap-0.5">
                                     <CheckCheck className="h-3 w-3 text-emerald-400" />
                                     <span className="text-[8px] font-bold text-emerald-400">Delivered</span>
                                   </span>
-                                ) : (
-                                  <Check className="h-3.5 w-3.5 text-red-500 stroke-[3]" />
                                 )}
                               </span>
                             )}

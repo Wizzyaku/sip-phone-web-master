@@ -330,13 +330,13 @@ export function MobileMessages(props: MobileMessagesProps) {
                           <>
                             {msg.status === 'read' ? (
                               <CheckCheck className="w-3 h-3 text-indigo-200" />
-                            ) : msg.status === 'delivered' ? (
+                            ) : msg.status === 'queued' || msg.status === 'sending' ? (
+                              <Check className="w-3.5 h-3.5 text-red-500 stroke-[3]" />
+                            ) : (
                               <span className="flex items-center gap-0.5">
                                 <CheckCheck className="w-3 h-3 text-emerald-400" />
                                 <span className="text-[8px] font-bold text-emerald-400">Delivered</span>
                               </span>
-                            ) : (
-                              <Check className="w-3.5 h-3.5 text-red-500 stroke-[3]" />
                             )}
                           </>
                         )}
