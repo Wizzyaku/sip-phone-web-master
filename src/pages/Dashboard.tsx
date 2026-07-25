@@ -10,7 +10,6 @@ import {
   PhoneOutgoing,
   Copy,
   MoreVertical,
-  CheckCircle,
   Wallet,
   RefreshCw,
   X,
@@ -69,7 +68,6 @@ export function Dashboard() {
   const [selectedPackage, setSelectedPackage] = useState<number>(1);
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
-  const refreshBalance = useAppStore((s) => s.refreshBalance);
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumberRecord[]>([]);
   const [callLogs, setCallLogs] = useState<CallLogRecord[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
