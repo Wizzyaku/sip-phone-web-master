@@ -211,9 +211,7 @@ export function Messages() {
       const merged = current.map((sm) => {
         const apiMatch = uniqueMapped.find((m) => m.id === sm.id);
         if (!apiMatch) return sm;
-        // Preserve read status from store; keep direction from store (recalculated by API)
-        const preservedStatus = sm.status === 'read' ? 'read' : apiMatch.status;
-        return { ...apiMatch, conversationId: sm.conversationId, status: preservedStatus };
+        return { ...apiMatch, conversationId: sm.conversationId };
       });
       const newApiMessages = uniqueMapped.filter((m) => !current.some((sm) => sm.id === m.id));
       setStoreMessages([...merged, ...newApiMessages]);
@@ -339,7 +337,7 @@ export function Messages() {
         body: body.trim(),
         type: 'text',
         direction: 'outbound',
-        status: res.data.status || 'queued',
+        status: res.data.status || 'delivered',
         createdAt: new Date().toISOString(),
       });
       setBody('');
@@ -370,7 +368,7 @@ export function Messages() {
       mediaUrl: url,
       mediaName: file.name,
       direction: 'outbound',
-      status: 'queued',
+      status: 'delivered',
       createdAt: new Date().toISOString(),
     });
   };
@@ -695,9 +693,7 @@ export function Messages() {
                             </span>
                             {isSent && (
                               <span className="flex items-center gap-0.5">
-                                {msg.status === 'read' ? (
-                                  <CheckCheck className="h-3 w-3 text-indigo-200" />
-                                ) : msg.status === 'queued' || msg.status === 'sending' ? (
+                                {msg.status === 'queued' || msg.status === 'sending' ? (
                                   <Check className="h-3.5 w-3.5 text-red-500 stroke-[3]" />
                                 ) : (
                                   <span className="flex items-center gap-0.5">

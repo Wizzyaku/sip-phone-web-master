@@ -194,9 +194,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Mark inbound messages as 'read' if they're in the read set
+    // Normalize outbound messages to 'delivered' once server has confirmed send
     const withReadStatus = recalculated.map((m) => {
       if (m.direction === 'inbound' && readSids.has(m.sid)) {
         return { ...m, status: 'read' };
+      }
+      if (m.direction === 'outbound' && m.status !== 'queued' && m.status !== 'sending') {
+        return { ...m, status: 'delivered' };
       }
       return m;
     });
@@ -360,7 +364,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             body: retryMessage.text || messageBody,
             direction: 'outbound' as const,
             dateCreated: retryMessage.received_at || new Date().toISOString(),
-            status: ['delivered', 'sent', 'webhook_delivered'].includes(retryMessage.to?.[0]?.status) ? retryMessage.to[0].status : 'sent',
+            status: 'delivered',
           };
           await addMessage(retryRecord);
           console.log('Outbound SMS sent (after retry):', retryRecord);
@@ -386,7 +390,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       body: message.text || messageBody,
       direction: 'outbound' as const,
       dateCreated: message.received_at || new Date().toISOString(),
-      status: ['delivered', 'sent', 'webhook_delivered'].includes(message.to?.[0]?.status) ? message.to[0].status : 'sent',
+      status: 'delivered',
     };
     await addMessage(record);
     console.log('Outbound SMS sent:', record);
