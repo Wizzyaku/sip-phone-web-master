@@ -132,12 +132,14 @@ export async function fetchTransactions(): Promise<Transaction[]> {
 }
 
 function mapTransaction(row: Record<string, unknown>): Transaction {
+  const validCurrencies = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
+  const rawCurrency = String(row.currency);
   return {
     id: String(row.id),
     reference: String(row.reference),
     tokens: Number(row.tokens),
     amountMinor: Number(row.amount_minor),
-    currency: String(row.currency),
+    currency: validCurrencies.includes(rawCurrency) ? rawCurrency : 'NGN',
     provider: String(row.provider),
     status: String(row.status) as Transaction['status'],
     createdAt: String(row.created_at),
@@ -151,5 +153,11 @@ export function formatTokens(value: number): string {
 
 export function formatCurrency(minor: number, currency: string): string {
   const major = minor / 100;
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(major);
+  const validCurrencies = ['NGN', 'USD', 'EUR', 'GBP', 'GHS', 'KES', 'ZAR'];
+  const safeCurrency = validCurrencies.includes(currency) ? currency : 'NGN';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: safeCurrency }).format(major);
+  } catch {
+    return `₦${major.toLocaleString('en-US')}`;
+  }
 }
