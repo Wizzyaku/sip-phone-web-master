@@ -381,7 +381,7 @@ export function Settings() {
                   <div className="flex flex-col flex-grow">
                     <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Telegram</span>
                     <span className="text-[9px] font-medium text-slate-500 dark:text-slate-400">
-                      {telegram.loading ? 'Loading...' : telegram.linked ? 'Linked' : 'Not linked'}
+                      {telegram.loading ? 'Loading...' : telegram.linked ? (telegram.enabled ? 'Linked & Active' : 'Linked — Off') : 'Not linked'}
                     </span>
                   </div>
                 </div>
@@ -638,7 +638,7 @@ export function Settings() {
                       <div className="flex flex-col">
                         <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Telegram</span>
                         <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                          {telegram.loading ? 'Loading...' : telegram.linked ? 'Linked' : 'Not linked'}
+                          {telegram.loading ? 'Loading...' : telegram.linked ? (telegram.enabled ? 'Linked & Active' : 'Linked — Notifications Off') : 'Not linked'}
                         </span>
                       </div>
                     </div>

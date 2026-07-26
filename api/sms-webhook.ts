@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { addMessage, updateMessageStatus } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
 import { SMS_COINS_PER_SEGMENT, estimateSmsSegments } from '../lib/billing.js';
-import { notifyTelegramByPhone } from '../lib/telegram.js';
+import { notifyTelegramByPhone, notifyTelegramByUserId } from '../lib/telegram.js';
 
 export const config = {
   api: {
@@ -172,10 +172,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           console.error('Inbound SMS billing error:', billingErr);
         }
 
-        await notifyTelegramByPhone(
-          to,
-          `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`
-        );
+        const telegramMessage = `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`;
+        if (toOwnerId) {
+          await notifyTelegramByUserId(toOwnerId, telegramMessage);
+        } else {
+          await notifyTelegramByPhone(to, telegramMessage);
+        }
       }
     } else if (eventType === 'message.delivery_update') {
       const payload = event?.payload as Record<string, unknown> | undefined;
