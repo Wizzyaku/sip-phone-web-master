@@ -95,13 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (altFromOwner?.user_id) fromOwnerId = altFromOwner.user_id;
         }
 
-        if (fromOwnerId) {
-          console.log('Skipping message in webhook — from number is owned by a platform user (already stored by send-sms):', { from, to, body: msgBody });
-          res.status(200).json({ received: true, skipped: true });
-          return;
-        }
-
-        // Check who owns the 'to' number for billing
+        // Check who owns the 'to' number for billing and Telegram notifications
         let toOwnerId: string | null = null;
         const { data: toOwner } = await serverClient
           .from('phone_numbers')
@@ -123,55 +117,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (altToOwner?.user_id) toOwnerId = altToOwner.user_id;
         }
 
-        await addMessage({
-          sid,
-          from,
-          to,
-          body: msgBody,
-          direction: 'inbound',
-          dateCreated: (payload?.received_at as string) || new Date().toISOString(),
-          status: 'received',
-        });
-        console.log('Inbound SMS received:', { from, to, body: msgBody });
+        // If the 'from' number belongs to a platform user, the message was already
+        // stored by send-sms.ts. Skip addMessage to avoid duplicates, but STILL
+        // send Telegram notification to the recipient.
+        if (fromOwnerId) {
+          console.log('Skipping addMessage in webhook — from number is owned by a platform user (already stored by send-sms):', { from, to, body: msgBody });
+        } else {
+          await addMessage({
+            sid,
+            from,
+            to,
+            body: msgBody,
+            direction: 'inbound',
+            dateCreated: (payload?.received_at as string) || new Date().toISOString(),
+            status: 'received',
+          });
+          console.log('Inbound SMS received:', { from, to, body: msgBody });
 
-        // Charge the number owner for inbound SMS
-        try {
-          if (toOwnerId) {
-            const segments = estimateSmsSegments(msgBody!);
-            const smsCost = SMS_COINS_PER_SEGMENT * segments;
+          // Charge the number owner for inbound SMS
+          try {
+            if (toOwnerId) {
+              const segments = estimateSmsSegments(msgBody!);
+              const smsCost = SMS_COINS_PER_SEGMENT * segments;
 
-            const { error: chargeError } = await serverClient.rpc('charge_sms', {
-              p_user_id: toOwnerId,
-              p_coins: smsCost,
-              p_message_sid: sid,
-              p_direction: 'inbound',
-              p_type: 'sms',
-              p_segments: segments,
-            });
+              const { error: chargeError } = await serverClient.rpc('charge_sms', {
+                p_user_id: toOwnerId,
+                p_coins: smsCost,
+                p_message_sid: sid,
+                p_direction: 'inbound',
+                p_type: 'sms',
+                p_segments: segments,
+              });
 
-            if (chargeError) {
-              console.error('Inbound SMS charge error:', chargeError.message);
-            } else {
-              console.log(`Charged ${smsCost} coins for inbound SMS to ${toOwnerId}`);
+              if (chargeError) {
+                console.error('Inbound SMS charge error:', chargeError.message);
+              } else {
+                console.log(`Charged ${smsCost} coins for inbound SMS to ${toOwnerId}`);
+              }
+
+              // Log to messages_log
+              await serverClient.from('messages_log').insert({
+                user_id: toOwnerId,
+                message_sid: sid,
+                direction: 'inbound',
+                type: 'sms',
+                segments,
+                from_number: from,
+                to_number: to,
+                cost_coins: smsCost,
+                status: 'received',
+              });
             }
-
-            // Log to messages_log
-            await serverClient.from('messages_log').insert({
-              user_id: toOwnerId,
-              message_sid: sid,
-              direction: 'inbound',
-              type: 'sms',
-              segments,
-              from_number: from,
-              to_number: to,
-              cost_coins: smsCost,
-              status: 'received',
-            });
+          } catch (billingErr) {
+            console.error('Inbound SMS billing error:', billingErr);
           }
-        } catch (billingErr) {
-          console.error('Inbound SMS billing error:', billingErr);
         }
 
+        // Always send Telegram notification to the recipient (regardless of whether
+        // the message was stored by us or by send-sms)
         const telegramMessage = `*New SMS from ${from}*\n\n${msgBody}\n\n_To: ${to}_\n\nReply to this message to respond.`;
         if (toOwnerId) {
           await notifyTelegramByUserId(toOwnerId, telegramMessage);
