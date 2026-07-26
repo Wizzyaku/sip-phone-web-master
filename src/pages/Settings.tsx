@@ -626,6 +626,52 @@ export function Settings() {
                     </div>
                   </div>
                 </div>
+
+                {/* Telegram */}
+                <div className="bg-white border border-slate-200/80 rounded-[24px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-5 dark:bg-slate-900 dark:border-slate-700/50">
+                  <h3 className="text-[16px] font-bold text-slate-800 tracking-tight mb-4 dark:text-slate-100">Telegram</h3>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-[10px] bg-sky-50 flex items-center justify-center text-sky-500 dark:bg-sky-900/20 dark:text-sky-400">
+                        <MessageCircle className="w-4 h-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Telegram</span>
+                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                          {telegram.loading ? 'Loading...' : telegram.linked ? 'Linked' : 'Not linked'}
+                        </span>
+                      </div>
+                    </div>
+                    {telegram.loading ? null : telegram.linked ? (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">Telegram Notifications</span>
+                        <button
+                          onClick={handleToggleTelegram}
+                          className={cn(
+                            'relative inline-block w-11 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
+                            telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
+                              telegram.enabled ? 'translate-x-5 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                            )}
+                          />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleGenerateTelegramCode}
+                        disabled={telegram.generating}
+                        className="h-10 px-4 bg-indigo-600 text-white rounded-[12px] text-[13px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {telegram.generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        Send code to Telegram
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Right Column: Preferences & Appearance */}
@@ -734,52 +780,6 @@ export function Settings() {
                     >
                       <RotateCcw className="w-3.5 h-3.5" /> Clear All Notifications
                     </button>
-                  </div>
-                </div>
-
-                {/* Telegram */}
-                <div className="bg-white border border-slate-200/80 rounded-[24px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-5 dark:bg-slate-900 dark:border-slate-700/50">
-                  <h3 className="text-[16px] font-bold text-slate-800 tracking-tight mb-4 dark:text-slate-100">Telegram</h3>
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-[10px] bg-sky-50 flex items-center justify-center text-sky-500 dark:bg-sky-900/20 dark:text-sky-400">
-                        <MessageCircle className="w-4 h-4" />
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100">Telegram</span>
-                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400">
-                          {telegram.loading ? 'Loading...' : telegram.linked ? 'Linked' : 'Not linked'}
-                        </span>
-                      </div>
-                    </div>
-                    {telegram.loading ? null : telegram.linked ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">Telegram Notifications</span>
-                        <button
-                          onClick={handleToggleTelegram}
-                          className={cn(
-                            'relative inline-block w-11 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
-                            telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
-                              telegram.enabled ? 'translate-x-5 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
-                            )}
-                          />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={handleGenerateTelegramCode}
-                        disabled={telegram.generating}
-                        className="h-10 px-4 bg-indigo-600 text-white rounded-[12px] text-[13px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {telegram.generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        Send code to Telegram
-                      </button>
-                    )}
                   </div>
                 </div>
 
