@@ -517,7 +517,7 @@ export function Settings() {
       {/* ========================================== */}
       {isDesktop && (
         <div className="hidden lg:block h-full overflow-y-auto no-scrollbar bg-[#F0F4F8] dark:bg-slate-950">
-          <div className="p-8 pb-8 flex flex-col gap-5 max-w-[1200px] mx-auto">
+          <div className="p-8 pb-2 flex flex-col gap-5 max-w-[1200px] mx-auto">
             {/* Page Header */}
             <div>
               <h1 className="text-[24px] font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Settings</h1>
