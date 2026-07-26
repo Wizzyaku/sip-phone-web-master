@@ -174,12 +174,12 @@ export function Settings() {
   };
 
   return (
-    <div className="relative h-[calc(100vh-154px)] w-full min-w-0 overflow-hidden bg-background md:h-[calc(100vh-7.5rem)] md:rounded-2xl md:border md:border-border/30">
+    <div className="relative w-full min-w-0 bg-background md:rounded-2xl md:border md:border-border/30">
       {/* ========================================== */}
       {/* MOBILE VIEW                                 */}
       {/* ========================================== */}
       {!isDesktop && (
-        <div className="absolute inset-0 flex flex-col bg-[#F0F4F8] dark:bg-slate-950">
+        <div className="flex flex-col bg-[#F0F4F8] dark:bg-slate-950">
           {/* Mobile Header */}
           <header className="shrink-0 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 pt-4 pb-3 px-4 flex items-center justify-between z-20 dark:bg-slate-900/90 dark:border-slate-700/50">
             <h1 className="text-[15px] font-extrabold tracking-tight text-slate-800 dark:text-slate-100">Settings</h1>
@@ -189,7 +189,7 @@ export function Settings() {
           </header>
 
           {/* Scrollable Content */}
-          <div className="flex-grow overflow-y-auto no-scrollbar px-4 pt-3 pb-[10px] flex flex-col gap-4 z-10">
+          <div className="overflow-y-auto no-scrollbar px-4 pt-3 pb-[10px] flex flex-col gap-4 z-10">
             {/* 1. Profile Summary Card */}
             <div className="animate-fade-in shrink-0 bg-white border border-slate-200/80 rounded-[20px] shadow-[0_4px_15px_rgba(15,23,42,0.03)] p-4 flex items-center gap-4 dark:bg-slate-900 dark:border-slate-700/50">
               <div className="relative shrink-0">
