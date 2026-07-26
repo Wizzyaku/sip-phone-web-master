@@ -24,6 +24,7 @@ import {
   Send,
   HelpCircle,
   FileText,
+  Unlink,
 } from 'lucide-react';
 import axios from 'axios';
 import { useAppStore } from '../store/appStore';
@@ -74,9 +75,11 @@ export function Settings() {
   const [telegram, setTelegram] = useState({
     linked: false,
     enabled: false,
+    chatId: '',
     linkUrl: '',
     loading: true,
     generating: false,
+    unlinking: false,
   });
   const [signOutModal, setSignOutModal] = useState(false);
   const [helpCenterModal, setHelpCenterModal] = useState(false);
@@ -124,6 +127,7 @@ export function Settings() {
         ...t,
         linked: !!profile?.telegram_chat_id,
         enabled: !!profile?.telegram_enabled,
+        chatId: profile?.telegram_chat_id ?? '',
         loading: false,
       }));
     } catch {
@@ -161,6 +165,22 @@ export function Settings() {
     } catch (err) {
       console.error('Failed to toggle Telegram:', err);
       setTelegram((t) => ({ ...t, enabled: !next }));
+    }
+  };
+
+  const handleUnlinkTelegram = async () => {
+    try {
+      setTelegram((t) => ({ ...t, unlinking: true }));
+      const userId = await getUserId();
+      if (!userId) return;
+      await supabase
+        .from('profiles')
+        .update({ telegram_chat_id: null, telegram_enabled: false, telegram_code: null, telegram_code_expires_at: null })
+        .eq('id', userId);
+      setTelegram((t) => ({ ...t, linked: false, enabled: false, chatId: '', unlinking: false }));
+    } catch (err) {
+      console.error('Failed to unlink Telegram:', err);
+      setTelegram((t) => ({ ...t, unlinking: false }));
     }
   };
 
@@ -386,23 +406,39 @@ export function Settings() {
                   </div>
                 </div>
                 {telegram.loading ? null : telegram.linked ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Notifications</span>
-                    <button
-                      onClick={handleToggleTelegram}
-                      className={cn(
-                        'relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
-                        telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
-                      )}
-                    >
-                      <span
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-medium text-slate-600 dark:text-slate-300">Notifications</span>
+                      <button
+                        onClick={handleToggleTelegram}
                         className={cn(
-                          'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
-                          telegram.enabled ? 'translate-x-4 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                          'relative inline-block w-10 mr-1 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
+                          telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
                         )}
-                      />
-                    </button>
-                  </div>
+                      >
+                        <span
+                          className={cn(
+                            'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
+                            telegram.enabled ? 'translate-x-4 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                          )}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] font-medium text-slate-400">Chat ID</span>
+                        <span className="text-[11px] font-mono text-slate-600 dark:text-slate-300">{telegram.chatId}</span>
+                      </div>
+                      <button
+                        onClick={handleUnlinkTelegram}
+                        disabled={telegram.unlinking}
+                        className="flex items-center gap-1.5 h-8 px-3 bg-red-50 text-red-600 rounded-[8px] text-[11px] font-bold active:scale-95 transition-transform disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400"
+                      >
+                        {telegram.unlinking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
+                        Unlink
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <button
                     onClick={handleGenerateTelegramCode}
@@ -643,23 +679,39 @@ export function Settings() {
                       </div>
                     </div>
                     {telegram.loading ? null : telegram.linked ? (
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">Telegram Notifications</span>
-                        <button
-                          onClick={handleToggleTelegram}
-                          className={cn(
-                            'relative inline-block w-11 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
-                            telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
-                          )}
-                        >
-                          <span
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">Telegram Notifications</span>
+                          <button
+                            onClick={handleToggleTelegram}
                             className={cn(
-                              'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
-                              telegram.enabled ? 'translate-x-5 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                              'relative inline-block w-11 align-middle select-none transition duration-200 ease-in h-6 rounded-full cursor-pointer',
+                              telegram.enabled ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-700'
                             )}
-                          />
-                        </button>
-                      </div>
+                          >
+                            <span
+                              className={cn(
+                                'absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white border-4 transition-all duration-300 shadow-sm',
+                                telegram.enabled ? 'translate-x-5 border-indigo-600' : 'border-slate-200 dark:border-slate-700'
+                              )}
+                            />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex flex-col">
+                            <span className="text-[10px] font-medium text-slate-400">Chat ID</span>
+                            <span className="text-[12px] font-mono text-slate-600 dark:text-slate-300">{telegram.chatId}</span>
+                          </div>
+                          <button
+                            onClick={handleUnlinkTelegram}
+                            disabled={telegram.unlinking}
+                            className="flex items-center gap-1.5 h-9 px-3 bg-red-50 text-red-600 rounded-[10px] text-[12px] font-bold active:scale-95 transition-transform disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400"
+                          >
+                            {telegram.unlinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+                            Unlink
+                          </button>
+                        </div>
+                      </>
                     ) : (
                       <button
                         onClick={handleGenerateTelegramCode}
