@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createHmac } from 'crypto';
+import { createHmac, createHash } from 'crypto';
 import { addMessage } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
 import { getTelegramUsername } from '../lib/telegram.js';
@@ -197,8 +197,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .map((k) => `${k}=${body[k]}`)
       .join('\n');
 
-    const secretKey = createHmac('sha256', 'WebBotDataToken').update(TELEGRAM_BOT_TOKEN).digest();
+    // For Login Widget: secret_key = SHA256(bot_token)
+    // (Note: Mini App uses HMAC-SHA256 with "WebBotDataToken" — different!)
+    const secretKey = createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
     const computedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+    console.log('[Telegram] Widget auth — dataCheckString:', dataCheckString);
+    console.log('[Telegram] Widget auth — received hash:', hash, 'computed hash:', computedHash);
 
     if (computedHash !== hash) {
       console.error('[Telegram] Login widget hash verification failed');
