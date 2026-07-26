@@ -21,7 +21,6 @@ import {
   ChevronRight,
   Mail,
   MessageCircle,
-  Send,
   HelpCircle,
   FileText,
   Unlink,
@@ -32,6 +31,7 @@ import { cn } from '../lib/utils';
 import { supabase } from '../lib/supabase';
 import { saveProfile } from '../lib/profile';
 import { useIsDesktop } from '../hooks/useIsDesktop';
+import { TelegramLoginWidget, type TelegramAuthUser } from '../components/TelegramLoginWidget';
 
 const themes = [
   { id: 'light', label: 'Light Theme', icon: Sun },
@@ -76,10 +76,13 @@ export function Settings() {
     linked: false,
     enabled: false,
     chatId: '',
+    botUsername: '',
     linkUrl: '',
     loading: true,
     generating: false,
     unlinking: false,
+    linking: false,
+    error: '',
   });
   const [signOutModal, setSignOutModal] = useState(false);
   const [helpCenterModal, setHelpCenterModal] = useState(false);
@@ -123,6 +126,15 @@ export function Settings() {
         .select('telegram_chat_id, telegram_enabled')
         .eq('id', userId)
         .maybeSingle();
+
+      // Fetch bot username for the login widget
+      try {
+        const botRes = await axios.get(`${API_URL}/telegram-webhook?action=bot-info`);
+        setTelegram((t) => ({ ...t, botUsername: botRes.data.username || '' }));
+      } catch {
+        console.warn('Failed to fetch Telegram bot username');
+      }
+
       setTelegram((t) => ({
         ...t,
         linked: !!profile?.telegram_chat_id,
@@ -132,26 +144,6 @@ export function Settings() {
       }));
     } catch {
       setTelegram((t) => ({ ...t, loading: false }));
-    }
-  };
-
-  const handleGenerateTelegramCode = async () => {
-    try {
-      setTelegram((t) => ({ ...t, generating: true }));
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      if (!token) return;
-      const res = await axios.post(`${API_URL}/telegram-webhook?action=generate-code`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.data.link) {
-        setTelegram((t) => ({ ...t, linkUrl: res.data.link }));
-        window.open(res.data.link, '_blank');
-      }
-    } catch (err) {
-      console.error('Failed to generate Telegram code:', err);
-    } finally {
-      setTelegram((t) => ({ ...t, generating: false }));
     }
   };
 
@@ -181,6 +173,33 @@ export function Settings() {
     } catch (err) {
       console.error('Failed to unlink Telegram:', err);
       setTelegram((t) => ({ ...t, unlinking: false }));
+    }
+  };
+
+  const handleTelegramAuth = async (user: TelegramAuthUser) => {
+    try {
+      setTelegram((t) => ({ ...t, linking: true, error: '' }));
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) {
+        setTelegram((t) => ({ ...t, linking: false, error: 'Not authenticated.' }));
+        return;
+      }
+      const res = await axios.post(`${API_URL}/telegram-webhook?action=link-widget`, user, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data.success) {
+        setTelegram((t) => ({
+          ...t,
+          linked: true,
+          enabled: true,
+          chatId: res.data.chatId,
+          linking: false,
+        }));
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to link Telegram';
+      setTelegram((t) => ({ ...t, linking: false, error: msg }));
     }
   };
 
@@ -440,14 +459,27 @@ export function Settings() {
                     </div>
                   </>
                 ) : (
-                  <button
-                    onClick={handleGenerateTelegramCode}
-                    disabled={telegram.generating}
-                    className="h-9 px-3 bg-indigo-600 text-white rounded-[10px] text-[11px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {telegram.generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    Send code to Telegram
-                  </button>
+                  <div className="flex flex-col items-center gap-2 py-1">
+                    {telegram.linking && (
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Linking...
+                      </div>
+                    )}
+                    {telegram.error && (
+                      <span className="text-[10px] text-red-500 text-center">{telegram.error}</span>
+                    )}
+                    {telegram.botUsername && !telegram.linking && (
+                      <TelegramLoginWidget
+                        botUsername={telegram.botUsername}
+                        onAuth={handleTelegramAuth}
+                        size="small"
+                      />
+                    )}
+                    {!telegram.botUsername && !telegram.linking && (
+                      <span className="text-[10px] text-slate-400 text-center">Bot not configured. Set TELEGRAM_BOT_TOKEN.</span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -713,14 +745,27 @@ export function Settings() {
                         </div>
                       </>
                     ) : (
-                      <button
-                        onClick={handleGenerateTelegramCode}
-                        disabled={telegram.generating}
-                        className="h-10 px-4 bg-indigo-600 text-white rounded-[12px] text-[13px] font-bold active:scale-95 transition-transform disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {telegram.generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        Send code to Telegram
-                      </button>
+                      <div className="flex flex-col items-center gap-2 py-1">
+                        {telegram.linking && (
+                          <div className="flex items-center gap-2 text-[12px] text-slate-500">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Linking...
+                          </div>
+                        )}
+                        {telegram.error && (
+                          <span className="text-[11px] text-red-500 text-center">{telegram.error}</span>
+                        )}
+                        {telegram.botUsername && !telegram.linking && (
+                          <TelegramLoginWidget
+                            botUsername={telegram.botUsername}
+                            onAuth={handleTelegramAuth}
+                            size="large"
+                          />
+                        )}
+                        {!telegram.botUsername && !telegram.linking && (
+                          <span className="text-[11px] text-slate-400 text-center">Bot not configured. Set TELEGRAM_BOT_TOKEN.</span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

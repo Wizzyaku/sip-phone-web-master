@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { createHmac } from 'crypto';
 import { addMessage } from '../lib/message-store.js';
 import { supabaseServer } from '../lib/supabase-server.js';
 import { getTelegramUsername } from '../lib/telegram.js';
@@ -138,8 +139,103 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // Bot-info action (called from Settings UI to get bot username for login widget)
+  if (req.query.action === 'bot-info') {
+    const botUsername = await getTelegramUsername();
+    if (!botUsername) {
+      res.status(500).json({ error: 'TELEGRAM_BOT_TOKEN not configured.' });
+      return;
+    }
+    res.status(200).json({ username: botUsername });
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.status(405).end();
+    return;
+  }
+
+  // Link-widget action (called from Settings UI after Telegram Login Widget auth)
+  if (req.query.action === 'link-widget') {
+    const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    if (!token) {
+      res.status(401).json({ error: 'Missing authorization token.' });
+      return;
+    }
+
+    const serverClient = supabaseServer();
+    const { data: userData, error: authError } = await serverClient.auth.getUser(token);
+    if (authError || !userData.user) {
+      res.status(401).json({ error: 'Invalid or expired token.' });
+      return;
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = parseJsonBody(req);
+    } catch {
+      res.status(400).json({ error: 'Invalid JSON body.' });
+      return;
+    }
+
+    const telegramId = body.id as number | undefined;
+    const hash = body.hash as string | undefined;
+    const authDate = body.auth_date as number | undefined;
+    const firstName = (body.first_name as string) || '';
+    const username = (body.username as string) || '';
+
+    if (!telegramId || !hash || !authDate) {
+      res.status(400).json({ error: 'Missing required Telegram auth fields.' });
+      return;
+    }
+
+    // Verify the hash to ensure this is an authentic Telegram login
+    // See: https://core.telegram.org/widgets/login#checking-authorization
+    const dataCheckString = Object.keys(body)
+      .filter((k) => k !== 'hash' && body[k] !== undefined && body[k] !== null)
+      .sort()
+      .map((k) => `${k}=${body[k]}`)
+      .join('\n');
+
+    const secretKey = createHmac('sha256', 'WebBotDataToken').update(TELEGRAM_BOT_TOKEN).digest();
+    const computedHash = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+    if (computedHash !== hash) {
+      console.error('[Telegram] Login widget hash verification failed');
+      res.status(401).json({ error: 'Telegram auth verification failed.' });
+      return;
+    }
+
+    // Check auth_date isn't too old (within 1 hour)
+    const authAge = Date.now() / 1000 - authDate;
+    if (authAge > 3600) {
+      res.status(401).json({ error: 'Telegram auth expired. Please try again.' });
+      return;
+    }
+
+    const chatId = String(telegramId);
+    const { error: updateError } = await serverClient
+      .from('profiles')
+      .update({
+        telegram_chat_id: chatId,
+        telegram_enabled: true,
+        telegram_code: null,
+        telegram_code_expires_at: null,
+      })
+      .eq('id', userData.user.id);
+
+    if (updateError) {
+      console.error('[Telegram] Failed to save chat ID from widget:', updateError.message);
+      res.status(500).json({ error: 'Failed to link Telegram.' });
+      return;
+    }
+
+    console.log('[Telegram] Linked via login widget — user:', userData.user.id, 'chat_id:', chatId, 'username:', username);
+
+    // Send a confirmation message to the user's Telegram
+    await sendTelegramMessage(chatId, `✅ *Telegram linked!\n\nHello${firstName ? ` ${firstName}` : ''}, you'll now receive SMS notifications here when enabled.`);
+
+    res.status(200).json({ success: true, chatId });
     return;
   }
 
