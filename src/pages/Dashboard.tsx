@@ -32,6 +32,24 @@ function formatTime(date: string): string {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function getCountdown(billingDate: string | null): { days: number; hours: number; minutes: number; expired: boolean } | null {
+  if (!billingDate) return null;
+  const target = new Date(billingDate).getTime();
+  const now = Date.now();
+  const diff = target - now;
+  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, expired: true };
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  return { days, hours, minutes, expired: false };
+}
+
+function formatCountdown(c: { days: number; hours: number; minutes: number }): string {
+  if (c.days > 0) return `${c.days}d ${c.hours}h ${c.minutes}m`;
+  if (c.hours > 0) return `${c.hours}h ${c.minutes}m`;
+  return `${c.minutes}m`;
+}
+
 function buildTrend(callLogs: CallLogRecord[], messages: { createdAt: string; type: string }[]) {
   const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   const today = new Date();
@@ -275,37 +293,70 @@ export function Dashboard() {
           </div>
 
           <div className="flex flex-col gap-2">
-            {phoneNumbers.slice(0, 2).map((num) => (
+            {phoneNumbers.slice(0, 2).map((num) => {
+              const countdown = getCountdown(num.next_billing_date);
+              const isExpiringSoon = countdown && !countdown.expired && countdown.days <= 3;
+              const isExpired = countdown?.expired;
+              const showWarning = isExpiringSoon || isExpired;
+              return (
               <div
                 key={num.id}
-                className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-2.5 flex items-center justify-between active:bg-slate-50 transition-colors dark:bg-slate-900 dark:border-slate-700/50"
+                className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-2.5 flex flex-col gap-2 active:bg-slate-50 transition-colors dark:bg-slate-900 dark:border-slate-700/50"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 text-[18px] flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-                    {num.flag || '📞'}
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                        {num.number}
-                      </h4>
-                      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', num.active ? 'bg-emerald-500' : 'bg-slate-300')} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-slate-100 text-[18px] flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+                      {num.flag || '📞'}
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500 truncate">
-                      {num.label || 'Phone Number'} • {num.features.join(', ') || 'SMS/Voice'}
-                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 truncate">
+                          {num.number}
+                        </h4>
+                        <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', num.active ? 'bg-emerald-500' : 'bg-slate-300')} />
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-500 truncate">
+                        {num.label || 'Phone Number'} • {num.features.join(', ') || 'SMS/Voice'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5 shrink-0 ml-2">
+                    <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
+                      <MoreVertical className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-1.5 shrink-0 ml-2">
-                  <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
-                    <Copy className="w-3.5 h-3.5" />
-                  </button>
-                  <button className="w-8 h-8 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors active:scale-95 dark:bg-slate-800 dark:text-slate-400">
-                    <MoreVertical className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                {showWarning && (
+                  <div className={cn(
+                    'rounded-[10px] px-2.5 py-2 flex items-center justify-between gap-2',
+                    isExpired ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'
+                  )}>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <AlertCircle className={cn('w-3.5 h-3.5 shrink-0', isExpired ? 'text-red-500' : 'text-amber-500')} />
+                      <span className={cn('text-[9.5px] font-bold leading-tight', isExpired ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400')}>
+                        {isExpired
+                          ? 'Number expired — deposit now to restore'
+                          : `Renewal in ${formatCountdown(countdown!)} — deposit to keep your number`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setTopUpOpen(true)}
+                      className={cn(
+                        'shrink-0 h-7 px-2.5 rounded-[8px] text-[10px] font-extrabold text-white active:scale-95 transition-transform flex items-center gap-1',
+                        isExpired ? 'bg-red-500' : 'bg-amber-500'
+                      )}
+                    >
+                      <Wallet className="w-3 h-3" />
+                      Deposit
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             {phoneNumbers.length === 0 && (
               <div className="bg-white border border-slate-200/80 rounded-[16px] shadow-[0_2px_10px_rgba(15,23,42,0.02)] p-4 flex flex-col items-center justify-center text-center dark:bg-slate-900 dark:border-slate-700/50">
@@ -597,37 +648,70 @@ export function Dashboard() {
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            {phoneNumbers.slice(0, 4).map((num) => (
+            {phoneNumbers.slice(0, 4).map((num) => {
+              const countdown = getCountdown(num.next_billing_date);
+              const isExpiringSoon = countdown && !countdown.expired && countdown.days <= 3;
+              const isExpired = countdown?.expired;
+              const showWarning = isExpiringSoon || isExpired;
+              return (
               <div
                 key={num.id}
-                className="premium-card rounded-2xl p-4 flex items-center justify-between hover:shadow-md transition-all"
+                className="premium-card rounded-2xl p-4 flex flex-col gap-3 hover:shadow-md transition-all"
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
-                    <span className="text-xl">{num.flag || '📞'}</span>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                        {num.number}
-                      </h4>
-                      <span className={cn('w-2 h-2 rounded-full shrink-0', num.active ? 'bg-emerald-500' : 'bg-slate-300')} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200 shadow-sm dark:bg-slate-800 dark:border-slate-700">
+                      <span className="text-xl">{num.flag || '📞'}</span>
                     </div>
-                    <span className="text-xs font-bold text-slate-500 truncate">
-                      {num.label || 'Phone Number'} • {num.features.join(', ') || 'SMS/Voice'}
-                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-extrabold text-slate-800 dark:text-slate-100 truncate">
+                          {num.number}
+                        </h4>
+                        <span className={cn('w-2 h-2 rounded-full shrink-0', num.active ? 'bg-emerald-500' : 'bg-slate-300')} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-500 truncate">
+                        {num.label || 'Phone Number'} • {num.features.join(', ') || 'SMS/Voice'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0 ml-3">
+                    <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2 shrink-0 ml-3">
-                  <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
-                    <Copy className="w-4 h-4" />
-                  </button>
-                  <button className="w-9 h-9 rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors dark:bg-slate-800 dark:text-slate-400">
-                    <MoreVertical className="w-4 h-4" />
-                  </button>
-                </div>
+                {showWarning && (
+                  <div className={cn(
+                    'rounded-xl px-3 py-2.5 flex items-center justify-between gap-2',
+                    isExpired ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'
+                  )}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AlertCircle className={cn('w-4 h-4 shrink-0', isExpired ? 'text-red-500' : 'text-amber-500')} />
+                      <span className={cn('text-xs font-bold leading-tight', isExpired ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400')}>
+                        {isExpired
+                          ? 'Number expired — deposit now to restore'
+                          : `Renewal in ${formatCountdown(countdown!)} — deposit to keep your number`}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setTopUpOpen(true)}
+                      className={cn(
+                        'shrink-0 h-8 px-3 rounded-[10px] text-xs font-extrabold text-white active:scale-95 transition-transform flex items-center gap-1.5',
+                        isExpired ? 'bg-red-500' : 'bg-amber-500'
+                      )}
+                    >
+                      <Wallet className="w-3.5 h-3.5" />
+                      Deposit Now
+                    </button>
+                  </div>
+                )}
               </div>
-            ))}
+              );
+            })}
 
             {phoneNumbers.length === 0 && (
               <div className="col-span-2 premium-card rounded-2xl p-8 flex flex-col items-center justify-center text-center">

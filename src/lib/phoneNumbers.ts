@@ -10,6 +10,8 @@ export interface PhoneNumberRecord {
   forwarding: string | null;
   voicemail: boolean;
   monthly_cost: number;
+  next_billing_date: string | null;
+  billing_status: string | null;
 }
 
 export async function fetchUserPhoneNumbers(): Promise<PhoneNumberRecord[]> {
@@ -19,7 +21,7 @@ export async function fetchUserPhoneNumbers(): Promise<PhoneNumberRecord[]> {
 
   const { data, error } = await supabase
     .from('phone_numbers')
-    .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost')
+    .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost, next_billing_date, billing_status')
     .eq('user_id', session.user.id)
     .order('created_at', { ascending: true });
 
@@ -52,7 +54,7 @@ export async function insertPhoneNumber(
       monthly_cost: monthlyCost,
       label: label || '',
     })
-    .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost')
+    .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost, next_billing_date, billing_status')
     .single();
 
   if (error) {
