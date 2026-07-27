@@ -70,8 +70,26 @@ function AppProviders() {
 
     loadProfile();
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
+        // Check if user has a profile (exists in profiles table)
+        // This prevents new users from signing in via Google OAuth without first registering
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (!profile) {
+          // No profile = user hasn't registered. Sign them out.
+          await supabase.auth.signOut();
+          setUser({ name: '', email: '', avatar: '', bio: '', isAdmin: false });
+          setTelnyxNumber(null);
+          // Redirect to home with error
+          window.location.href = '/?error=not_registered';
+          return;
+        }
+
         loadProfile();
       }
     });

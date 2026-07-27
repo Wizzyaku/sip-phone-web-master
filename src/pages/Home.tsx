@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import {
   Phone, MessageSquare, Route, Zap,
   CheckCircle, ArrowRight, Star, Menu, X, ChevronDown,
@@ -122,13 +122,42 @@ export function Home() {
   const isContact = location.pathname === '/contact';
   const resolvedTheme = useAppStore((s) => s.resolvedTheme);
   const setTheme = useAppStore((s) => s.setTheme);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   const toggleTheme = () => {
     setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
 
+  useEffect(() => {
+    if (searchParams.get('error') === 'not_registered') {
+      setOauthError('No account found with this Google account. Please sign up first to create an account.');
+      setSearchParams({}, { replace: true });
+      const timer = setTimeout(() => setOauthError(null), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams, setSearchParams]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* OAuth error banner */}
+      {oauthError && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800 px-4 py-3 flex items-center justify-between gap-3 animate-fade-in">
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">{oauthError}</p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => { setOauthError(null); openAuth('signup'); }}
+              className="text-sm font-bold text-red-700 dark:text-red-300 hover:underline"
+            >
+              Sign up
+            </button>
+            <button onClick={() => setOauthError(null)} className="text-red-400 hover:text-red-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-50 premium-header">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
