@@ -460,6 +460,9 @@ export function Settings() {
                   </>
                 ) : (
                   <div className="flex flex-col items-center gap-2 py-1">
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+                      Link your Telegram to get instant notifications when you receive new SMS messages — even when you're not in the app.
+                    </p>
                     {telegram.linking && (
                       <div className="flex items-center gap-2 text-[11px] text-slate-500">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -746,6 +749,9 @@ export function Settings() {
                       </>
                     ) : (
                       <div className="flex flex-col items-center gap-2 py-1">
+                        <p className="text-[12px] text-slate-500 dark:text-slate-400 text-center leading-relaxed">
+                          Link your Telegram to get instant notifications when you receive new SMS messages — even when you're not in the app.
+                        </p>
                         {telegram.linking && (
                           <div className="flex items-center gap-2 text-[12px] text-slate-500">
                             <Loader2 className="w-4 h-4 animate-spin" />
