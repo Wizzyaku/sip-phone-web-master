@@ -19,11 +19,28 @@ export async function fetchUserPhoneNumbers(): Promise<PhoneNumberRecord[]> {
   const session = sessionData.session;
   if (!session) return [];
 
-  const { data, error } = await supabase
+  // Try with billing columns first; fall back without them if columns don't exist yet
+  let data: PhoneNumberRecord[] | null = null;
+  let error: { message: string } | null = null;
+
+  const primary: any = await supabase
     .from('phone_numbers')
     .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost, next_billing_date, billing_status')
     .eq('user_id', session.user.id)
     .order('created_at', { ascending: true });
+
+  if (primary.error) {
+    // Retry without billing columns (they may not exist in the DB yet)
+    const fallback: any = await supabase
+      .from('phone_numbers')
+      .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: true });
+    data = (fallback.data || []) as PhoneNumberRecord[];
+    error = fallback.error;
+  } else {
+    data = (primary.data || []) as PhoneNumberRecord[];
+  }
 
   if (error) {
     console.error('Failed to fetch phone numbers:', error.message);
@@ -44,7 +61,7 @@ export async function insertPhoneNumber(
   const session = sessionData.session;
   if (!session) return null;
 
-  const { data, error } = await supabase
+  const insertRes: any = await supabase
     .from('phone_numbers')
     .insert({
       user_id: session.user.id,
@@ -57,12 +74,24 @@ export async function insertPhoneNumber(
     .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost, next_billing_date, billing_status')
     .single();
 
-  if (error) {
-    console.error('Failed to insert phone number:', error.message);
+  // If billing columns don't exist, retry without them
+  if (insertRes.error && insertRes.error.message?.includes('next_billing_date')) {
+    const fallback: any = await supabase
+      .from('phone_numbers')
+      .select('id, number, label, flag, features, active, forwarding, voicemail, monthly_cost')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single();
+    return (fallback.data || null) as PhoneNumberRecord | null;
+  }
+
+  if (insertRes.error) {
+    console.error('Failed to insert phone number:', insertRes.error.message);
     return null;
   }
 
-  return data as PhoneNumberRecord;
+  return insertRes.data as PhoneNumberRecord;
 }
 
 export async function togglePhoneNumberActive(id: string, active: boolean): Promise<boolean> {
