@@ -297,7 +297,7 @@ export function Dashboard() {
               const countdown = getCountdown(num.next_billing_date);
               const isExpiringSoon = countdown && !countdown.expired && countdown.days <= 3;
               const isExpired = countdown?.expired;
-              const showWarning = isExpiringSoon || isExpired;
+              const hasBillingDate = !!num.next_billing_date;
               return (
               <div
                 key={num.id}
@@ -329,31 +329,48 @@ export function Dashboard() {
                     </button>
                   </div>
                 </div>
-                {showWarning && (
-                  <div className={cn(
-                    'rounded-[10px] px-2.5 py-2 flex items-center justify-between gap-2',
-                    isExpired ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'
-                  )}>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <AlertCircle className={cn('w-3.5 h-3.5 shrink-0', isExpired ? 'text-red-500' : 'text-amber-500')} />
-                      <span className={cn('text-[9.5px] font-bold leading-tight', isExpired ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400')}>
-                        {isExpired
-                          ? 'Number expired — deposit now to restore'
-                          : `Renewal in ${formatCountdown(countdown!)} — deposit to keep your number`}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setTopUpOpen(true)}
-                      className={cn(
-                        'shrink-0 h-7 px-2.5 rounded-[8px] text-[10px] font-extrabold text-white active:scale-95 transition-transform flex items-center gap-1',
-                        isExpired ? 'bg-red-500' : 'bg-amber-500'
-                      )}
-                    >
-                      <Wallet className="w-3 h-3" />
-                      Deposit
-                    </button>
+                {/* Billing countdown bar — always visible */}
+                <div className={cn(
+                  'rounded-[10px] px-2.5 py-2 flex items-center justify-between gap-2',
+                  isExpired
+                    ? 'bg-red-50 dark:bg-red-900/20'
+                    : isExpiringSoon
+                      ? 'bg-amber-50 dark:bg-amber-900/20'
+                      : 'bg-slate-50 dark:bg-slate-800/50'
+                )}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <AlertCircle className={cn(
+                      'w-3.5 h-3.5 shrink-0',
+                      isExpired ? 'text-red-500' : isExpiringSoon ? 'text-amber-500' : 'text-slate-400'
+                    )} />
+                    <span className={cn(
+                      'text-[9.5px] font-bold leading-tight',
+                      isExpired
+                        ? 'text-red-600 dark:text-red-400'
+                        : isExpiringSoon
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-slate-500 dark:text-slate-400'
+                    )}>
+                      {isExpired
+                        ? 'Number expired — deposit now to restore'
+                        : isExpiringSoon
+                          ? `Renewal in ${formatCountdown(countdown!)} — you'll lose this number if not renewed`
+                          : hasBillingDate
+                            ? `Renews in ${formatCountdown(countdown!)}`
+                            : 'Deposit to keep your number active'}
+                    </span>
                   </div>
-                )}
+                  <button
+                    onClick={() => setTopUpOpen(true)}
+                    className={cn(
+                      'shrink-0 h-7 px-2.5 rounded-[8px] text-[10px] font-extrabold text-white active:scale-95 transition-transform flex items-center gap-1',
+                      isExpired ? 'bg-red-500' : isExpiringSoon ? 'bg-amber-500' : 'bg-indigo-500'
+                    )}
+                  >
+                    <Wallet className="w-3 h-3" />
+                    Deposit
+                  </button>
+                </div>
               </div>
               );
             })}
@@ -652,7 +669,7 @@ export function Dashboard() {
               const countdown = getCountdown(num.next_billing_date);
               const isExpiringSoon = countdown && !countdown.expired && countdown.days <= 3;
               const isExpired = countdown?.expired;
-              const showWarning = isExpiringSoon || isExpired;
+              const hasBillingDate = !!num.next_billing_date;
               return (
               <div
                 key={num.id}
@@ -684,31 +701,48 @@ export function Dashboard() {
                     </button>
                   </div>
                 </div>
-                {showWarning && (
-                  <div className={cn(
-                    'rounded-xl px-3 py-2.5 flex items-center justify-between gap-2',
-                    isExpired ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20'
-                  )}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <AlertCircle className={cn('w-4 h-4 shrink-0', isExpired ? 'text-red-500' : 'text-amber-500')} />
-                      <span className={cn('text-xs font-bold leading-tight', isExpired ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400')}>
-                        {isExpired
-                          ? 'Number expired — deposit now to restore'
-                          : `Renewal in ${formatCountdown(countdown!)} — deposit to keep your number`}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setTopUpOpen(true)}
-                      className={cn(
-                        'shrink-0 h-8 px-3 rounded-[10px] text-xs font-extrabold text-white active:scale-95 transition-transform flex items-center gap-1.5',
-                        isExpired ? 'bg-red-500' : 'bg-amber-500'
-                      )}
-                    >
-                      <Wallet className="w-3.5 h-3.5" />
-                      Deposit Now
-                    </button>
+                {/* Billing countdown bar — always visible */}
+                <div className={cn(
+                  'rounded-xl px-3 py-2.5 flex items-center justify-between gap-2',
+                  isExpired
+                    ? 'bg-red-50 dark:bg-red-900/20'
+                    : isExpiringSoon
+                      ? 'bg-amber-50 dark:bg-amber-900/20'
+                      : 'bg-slate-50 dark:bg-slate-800/50'
+                )}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className={cn(
+                      'w-4 h-4 shrink-0',
+                      isExpired ? 'text-red-500' : isExpiringSoon ? 'text-amber-500' : 'text-slate-400'
+                    )} />
+                    <span className={cn(
+                      'text-xs font-bold leading-tight',
+                      isExpired
+                        ? 'text-red-600 dark:text-red-400'
+                        : isExpiringSoon
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-slate-500 dark:text-slate-400'
+                    )}>
+                      {isExpired
+                        ? 'Number expired — deposit now to restore'
+                        : isExpiringSoon
+                          ? `Renewal in ${formatCountdown(countdown!)} — you'll lose this number if not renewed`
+                          : hasBillingDate
+                            ? `Renews in ${formatCountdown(countdown!)}`
+                            : 'Deposit to keep your number active'}
+                    </span>
                   </div>
-                )}
+                  <button
+                    onClick={() => setTopUpOpen(true)}
+                    className={cn(
+                      'shrink-0 h-8 px-3 rounded-[10px] text-xs font-extrabold text-white active:scale-95 transition-transform flex items-center gap-1.5',
+                      isExpired ? 'bg-red-500' : isExpiringSoon ? 'bg-amber-500' : 'bg-indigo-500'
+                    )}
+                  >
+                    <Wallet className="w-3.5 h-3.5" />
+                    Deposit Now
+                  </button>
+                </div>
               </div>
               );
             })}
